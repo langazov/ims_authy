@@ -6,6 +6,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   login: () => void
+  loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple') => void
   logout: () => void
   handleCallback: (code: string, state: string) => Promise<void>
 }
@@ -47,6 +48,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     authService.startLogin()
   }
 
+  const loginWithSocial = (provider: 'google' | 'github' | 'facebook' | 'apple') => {
+    console.info('[AuthContext] social login requested', { provider })
+    authService.startSocialLogin(provider)
+  }
+
   const logout = () => {
     console.info('[AuthContext] logout requested')
     authService.logout()
@@ -72,6 +78,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading,
     isAuthenticated: !!user,
     login,
+    loginWithSocial,
     logout,
     handleCallback
   }

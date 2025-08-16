@@ -47,7 +47,7 @@ class AuthService {
     localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
     localStorage.setItem('oauth_state', state)
 
-  console.info('[auth] startLogin', { clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, scope: config.oauth.scope, state })
+    console.info('[auth] startLogin', { clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, scope: config.oauth.scope, state })
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -60,6 +60,27 @@ class AuthService {
     })
 
     window.location.href = `${config.oauth.authUrl}?${params.toString()}`
+  }
+
+  async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple'): Promise<void> {
+    const codeVerifier = this.generateCodeVerifier()
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier)
+    const state = crypto.randomUUID()
+
+    localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
+    localStorage.setItem('oauth_state', state)
+
+    console.info('[auth] startSocialLogin', { provider, clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, state })
+
+    const params = new URLSearchParams({
+      client_id: config.oauth.clientId,
+      redirect_uri: config.oauth.redirectUri,
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
+    })
+
+    window.location.href = `${config.apiBaseUrl}/auth/${provider}/oauth?${params.toString()}`
   }
 
   async handleCallback(code: string, state: string): Promise<User> {
