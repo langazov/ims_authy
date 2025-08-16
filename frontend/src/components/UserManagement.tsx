@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, MagnifyingGlass, PencilSimple, Trash } from '@phosphor-icons/react'
+import { Plus, Search, Edit, Trash2 } from 'lucide-react'
 import UserForm from './UserForm'
 import { apiClient } from '@/lib/api'
 
@@ -22,8 +22,8 @@ interface User {
 
 export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
-  const [groups, setGroups] = useState([])
-  const [activity, setActivity] = useState([])
+  const [groups, setGroups] = useState<any[]>([])
+  const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -153,7 +153,7 @@ export default function UserManagement() {
         <CardHeader>
           <div className="flex items-center space-x-4">
             <div className="relative flex-1">
-              <MagnifyingGlass size={16} className="absolute left-3 top-3 text-muted-foreground" />
+              <Search size={16} className="absolute left-3 top-3 text-muted-foreground" />
               <Input
                 placeholder="Search users..."
                 value={searchTerm}
@@ -241,14 +241,14 @@ export default function UserManagement() {
                             setIsDialogOpen(true)
                           }}
                         >
-                          <PencilSimple size={14} />
+                          <Edit size={14} />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteUser(user.id)}
                         >
-                          <Trash size={14} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

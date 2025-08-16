@@ -45,8 +45,8 @@ db.refresh_tokens.createIndex({ "user_id": 1 });
 db.refresh_tokens.createIndex({ "expires_at": 1 });
 db.refresh_tokens.createIndex({ "revoked": 1 });
 
-// Create a default admin user (password: admin123)
-// Password hash for "admin123" using bcrypt
+// Create a default admin user (password: password)
+// Password hash for "password" using bcrypt
 db.users.insertOne({
     email: "admin@oauth2server.local",
     username: "admin",
@@ -99,5 +99,5 @@ db.clients.insertOne({
 });
 
 print('OAuth2 Server database initialized successfully!');
-print('Default admin user: admin@oauth2server.local / admin123');
+print('Default admin user: admin@oauth2server.local / password');
 print('Default test client: test-client-id / test-client-secret');

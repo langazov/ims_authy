@@ -90,6 +90,8 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	scope := r.FormValue("scope")
 	state := r.FormValue("state")
 	userID := r.FormValue("user_id")
+	codeChallenge := r.FormValue("code_challenge")
+	codeChallengeMethod := r.FormValue("code_challenge_method")
 
 	if responseType != "code" {
 		http.Error(w, "Unsupported response type", http.StatusBadRequest)
@@ -98,7 +100,7 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	scopes := strings.Fields(scope)
 
-	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, scopes)
+	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, scopes, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
 		return
@@ -125,6 +127,8 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 	redirectURI := r.URL.Query().Get("redirect_uri")
 	scope := r.URL.Query().Get("scope")
 	state := r.URL.Query().Get("state")
+	codeChallenge := r.URL.Query().Get("code_challenge")
+	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
 	html := `
 <!DOCTYPE html>
@@ -165,6 +169,8 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
         <input type="hidden" name="response_type" value="code">
         <input type="hidden" name="scope" value="` + scope + `">
         <input type="hidden" name="state" value="` + state + `">
+        <input type="hidden" name="code_challenge" value="` + codeChallenge + `">
+        <input type="hidden" name="code_challenge_method" value="` + codeChallengeMethod + `">
         <input type="hidden" name="user_id" id="user_id">
         
         <button type="button" onclick="authorize()">Authorize</button>
@@ -232,9 +238,18 @@ func (h *AuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 	code := r.FormValue("code")
 	clientID := r.FormValue("client_id")
 	clientSecret := r.FormValue("client_secret")
+	codeVerifier := r.FormValue("code_verifier")
 	redirectURI := r.FormValue("redirect_uri")
 
-	tokenResponse, err := h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI)
+	var tokenResponse *services.TokenResponse
+	var err error
+
+	// Support both PKCE (code_verifier) and traditional (client_secret) flows
+	if codeVerifier != "" {
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI)
+	} else {
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

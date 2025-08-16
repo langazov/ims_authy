@@ -45,15 +45,17 @@ type Client struct {
 }
 
 type AuthorizationCode struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Code         string             `bson:"code" json:"code"`
-	ClientID     string             `bson:"client_id" json:"client_id"`
-	UserID       string             `bson:"user_id" json:"user_id"`
-	RedirectURI  string             `bson:"redirect_uri" json:"redirect_uri"`
-	Scopes       []string           `bson:"scopes" json:"scopes"`
-	ExpiresAt    time.Time          `bson:"expires_at" json:"expires_at"`
-	Used         bool               `bson:"used" json:"used"`
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
+	ID                  primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Code                string             `bson:"code" json:"code"`
+	ClientID            string             `bson:"client_id" json:"client_id"`
+	UserID              string             `bson:"user_id" json:"user_id"`
+	RedirectURI         string             `bson:"redirect_uri" json:"redirect_uri"`
+	Scopes              []string           `bson:"scopes" json:"scopes"`
+	CodeChallenge       string             `bson:"code_challenge" json:"code_challenge"`
+	CodeChallengeMethod string             `bson:"code_challenge_method" json:"code_challenge_method"`
+	ExpiresAt           time.Time          `bson:"expires_at" json:"expires_at"`
+	Used                bool               `bson:"used" json:"used"`
+	CreatedAt           time.Time          `bson:"created_at" json:"created_at"`
 }
 
 type AccessToken struct {

@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Trash, Plus } from '@phosphor-icons/react'
+import { Trash2, Plus } from 'lucide-react'
 
 interface OAuthClient {
   id: string
@@ -167,7 +167,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
                   variant="ghost"
                   onClick={() => removeRedirectUri(index)}
                 >
-                  <Trash size={14} />
+                  <Trash2 size={14} />
                 </Button>
               )}
             </div>

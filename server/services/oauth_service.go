@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"time"
@@ -34,6 +35,7 @@ type TokenResponse struct {
 	TokenType    string `json:"token_type"`
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token,omitempty"`
+	IDToken      string `json:"id_token,omitempty"`
 	Scope        string `json:"scope,omitempty"`
 }
 
@@ -41,6 +43,15 @@ type Claims struct {
 	UserID   string   `json:"user_id"`
 	ClientID string   `json:"client_id"`
 	Scopes   []string `json:"scopes"`
+	jwt.RegisteredClaims
+}
+
+// IDTokenClaims represents claims for OpenID Connect ID tokens
+type IDTokenClaims struct {
+	UserID string   `json:"sub"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
+	Scopes []string `json:"scopes"`
 	jwt.RegisteredClaims
 }
 
@@ -79,21 +90,23 @@ func (s *OAuthService) ValidateClient(clientID, clientSecret string) (*models.Cl
 	return &client, nil
 }
 
-func (s *OAuthService) CreateAuthorizationCode(clientID, userID, redirectURI string, scopes []string) (string, error) {
+func (s *OAuthService) CreateAuthorizationCode(clientID, userID, redirectURI string, scopes []string, codeChallenge, codeChallengeMethod string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	code := s.generateRandomString(32)
 	authCode := &models.AuthorizationCode{
-		ID:          primitive.NewObjectID(),
-		Code:        code,
-		ClientID:    clientID,
-		UserID:      userID,
-		RedirectURI: redirectURI,
-		Scopes:      scopes,
-		ExpiresAt:   time.Now().Add(s.authCodeExpiry),
-		Used:        false,
-		CreatedAt:   time.Now(),
+		ID:                  primitive.NewObjectID(),
+		Code:                code,
+		ClientID:            clientID,
+		UserID:              userID,
+		RedirectURI:         redirectURI,
+		Scopes:              scopes,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
+		ExpiresAt:           time.Now().Add(s.authCodeExpiry),
+		Used:                false,
+		CreatedAt:           time.Now(),
 	}
 
 	_, err := s.codeCollection.InsertOne(ctx, authCode)
@@ -149,13 +162,116 @@ func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redir
 		return nil, err
 	}
 
+	// Generate ID token for OpenID Connect
+	idToken, err := s.generateIDToken(authCode.UserID, clientID, authCode.Scopes)
+	if err != nil {
+		return nil, err
+	}
+
 	return &TokenResponse{
 		AccessToken:  accessToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    int(s.accessTokenExpiry.Seconds()),
 		RefreshToken: refreshToken,
+		IDToken:      idToken,
 		Scope:        s.joinScopes(authCode.Scopes),
 	}, nil
+}
+
+// ExchangeCodeForTokensPKCE exchanges an authorization code for tokens using PKCE
+func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI string) (*TokenResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Validate client exists (no secret required for PKCE)
+	var client models.Client
+	err := s.clientCollection.FindOne(ctx, bson.M{
+		"client_id": clientID,
+		"active":    true,
+	}).Decode(&client)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("invalid client")
+		}
+		return nil, err
+	}
+
+	// Find the authorization code
+	var authCode models.AuthorizationCode
+	err = s.codeCollection.FindOne(ctx, bson.M{
+		"code":      code,
+		"client_id": clientID,
+		"used":      false,
+	}).Decode(&authCode)
+	if err != nil {
+		return nil, errors.New("invalid authorization code")
+	}
+
+	if time.Now().After(authCode.ExpiresAt) {
+		return nil, errors.New("authorization code expired")
+	}
+
+	if authCode.RedirectURI != redirectURI {
+		return nil, errors.New("redirect URI mismatch")
+	}
+
+	// Verify PKCE code_verifier against stored code_challenge
+	if authCode.CodeChallenge == "" {
+		return nil, errors.New("PKCE required but no code_challenge found")
+	}
+
+	if !s.verifyPKCE(codeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod) {
+		return nil, errors.New("invalid code_verifier")
+	}
+
+	// Mark code as used
+	_, err = s.codeCollection.UpdateOne(ctx, bson.M{"_id": authCode.ID}, bson.M{
+		"$set": bson.M{"used": true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate tokens
+	accessToken, err := s.generateAccessToken(authCode.UserID, clientID, authCode.Scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := s.generateRefreshToken(accessToken, clientID, authCode.UserID, authCode.Scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate ID token for OpenID Connect
+	idToken, err := s.generateIDToken(authCode.UserID, clientID, authCode.Scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenResponse{
+		AccessToken:  accessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int(s.accessTokenExpiry.Seconds()),
+		RefreshToken: refreshToken,
+		IDToken:      idToken,
+		Scope:        s.joinScopes(authCode.Scopes),
+	}, nil
+}
+
+// verifyPKCE verifies the code_verifier against the stored code_challenge
+func (s *OAuthService) verifyPKCE(codeVerifier, codeChallenge, method string) bool {
+	if method == "" || method == "plain" {
+		return codeVerifier == codeChallenge
+	}
+	
+	if method == "S256" {
+		hash := sha256.Sum256([]byte(codeVerifier))
+		computed := base64.RawURLEncoding.EncodeToString(hash[:])
+		return computed == codeChallenge
+	}
+	
+	return false
 }
 
 func (s *OAuthService) generateAccessToken(userID, clientID string, scopes []string) (string, error) {
@@ -195,6 +311,41 @@ func (s *OAuthService) generateAccessToken(userID, clientID string, scopes []str
 	}
 
 	_, err = s.tokenCollection.InsertOne(ctx, accessToken)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+// generateIDToken creates an OpenID Connect ID token with user information
+func (s *OAuthService) generateIDToken(userID, clientID string, scopes []string) (string, error) {
+	// Get user information for the ID token
+	userService := NewUserService(s.db)
+	user, err := userService.GetUserByID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	tokenID := uuid.New().String()
+	expiresAt := time.Now().Add(time.Hour) // ID tokens typically have shorter expiry
+
+	claims := &IDTokenClaims{
+		UserID: userID,
+		Email:  user.Email,
+		Groups: user.Groups,
+		Scopes: scopes,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        tokenID,
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Audience:  []string{clientID},
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
 		return "", err
 	}

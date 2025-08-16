@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Users, Shield, Settings, Activity } from '@phosphor-icons/react'
+import { Group, ShieldClose, Cog, Activity } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { apiClient } from '@/lib/api'
 
@@ -13,9 +13,9 @@ interface ActivityItem {
 }
 
 export default function Dashboard() {
-  const [users, setUsers] = useState([])
-  const [groups, setGroups] = useState([])
-  const [clients, setClients] = useState([])
+  const [users, setUsers] = useState<any[]>([])
+  const [groups, setGroups] = useState<any[]>([])
+  const [clients, setClients] = useState<any[]>([])
   const [activity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -48,21 +48,21 @@ export default function Dashboard() {
     {
       title: 'Total Users',
       value: users.length.toString(),
-      icon: Users,
+  icon: Group,
       description: `${activeUsers} active users`,
       trend: '+12% from last month'
     },
     {
       title: 'User Groups',
       value: groups.length.toString(),
-      icon: Shield,
+  icon: ShieldClose,
       description: 'Permission groups',
       trend: '+2 new groups'
     },
     {
       title: 'OAuth Clients',
       value: clients.length.toString(),
-      icon: Settings,
+  icon: Cog,
       description: 'Registered applications',
       trend: '3 pending approval'
     },

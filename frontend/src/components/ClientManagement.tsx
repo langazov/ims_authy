@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, MagnifyingGlass, PencilSimple, Trash, Copy, Eye, EyeSlash } from '@phosphor-icons/react'
+import { Plus, Search, Edit, Trash2, Copy, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import ClientForm from './ClientForm'
 
@@ -25,7 +25,7 @@ interface OAuthClient {
 export default function ClientManagement() {
   // Temporarily use local state to test if the component renders
   const [clients, setClients] = useState<OAuthClient[]>([])
-  const [activity, setActivity] = useState([])
+  const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedClient, setSelectedClient] = useState<OAuthClient | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -160,7 +160,7 @@ export default function ClientManagement() {
         <CardHeader>
           <div className="flex items-center space-x-4">
             <div className="relative flex-1">
-              <MagnifyingGlass size={16} className="absolute left-3 top-3 text-muted-foreground" />
+              <Search size={16} className="absolute left-3 top-3 text-muted-foreground" />
               <Input
                 placeholder="Search OAuth clients..."
                 value={searchTerm}
@@ -232,7 +232,7 @@ export default function ClientManagement() {
                           variant="ghost"
                           onClick={() => toggleSecretVisibility(client.id)}
                         >
-                          {visibleSecrets.has(client.id) ? <EyeSlash size={12} /> : <Eye size={12} />}
+                          {visibleSecrets.has(client.id) ? <EyeOff size={12} /> : <Eye size={12} />}
                         </Button>
                         <Button
                           size="sm"
@@ -281,14 +281,14 @@ export default function ClientManagement() {
                             setIsDialogOpen(true)
                           }}
                         >
-                          <PencilSimple size={14} />
+                          <Edit size={14} />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteClient(client.id)}
                         >
-                          <Trash size={14} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

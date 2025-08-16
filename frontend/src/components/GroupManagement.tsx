@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Plus, MagnifyingGlass, PencilSimple, Trash, Users } from '@phosphor-icons/react'
+import { Plus, Search, Edit, Trash2, Users } from 'lucide-react'
 import GroupForm from './GroupForm'
 
 interface Group {
@@ -19,8 +19,8 @@ interface Group {
 export default function GroupManagement() {
   // Temporarily use local state to test if the component renders
   const [groups, setGroups] = useState<Group[]>([])
-  const [users] = useState([])
-  const [activity, setActivity] = useState([])
+  const [users] = useState<any[]>([])
+  const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -119,7 +119,7 @@ export default function GroupManagement() {
         <CardHeader>
           <div className="flex items-center space-x-4">
             <div className="relative flex-1">
-              <MagnifyingGlass size={16} className="absolute left-3 top-3 text-muted-foreground" />
+              <Search size={16} className="absolute left-3 top-3 text-muted-foreground" />
               <Input
                 placeholder="Search groups..."
                 value={searchTerm}
@@ -166,14 +166,14 @@ export default function GroupManagement() {
                             setIsDialogOpen(true)
                           }}
                         >
-                          <PencilSimple size={14} />
+                          <Edit size={14} />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteGroup(group.id)}
                         >
-                          <Trash size={14} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </div>

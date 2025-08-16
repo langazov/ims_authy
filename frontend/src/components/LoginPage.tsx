@@ -1,4 +1,4 @@
-import { Shield } from '@phosphor-icons/react'
+import { Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/AuthContext'
@@ -11,7 +11,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <Shield size={48} weight="fill" className="text-primary" />
+            <Shield size={48} className="text-primary" />
           </div>
           <CardTitle className="text-2xl">OAuth2 Management</CardTitle>
           <CardDescription>
