@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "🔍 Checking OAuth2 Development Services Status"
 echo "=============================================="
