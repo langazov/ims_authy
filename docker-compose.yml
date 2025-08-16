@@ -40,6 +40,19 @@ services:
       - REDIRECT_URL=${REDIRECT_URL:-http://localhost:80/callback}
       - AUTH_SERVER_URL=${AUTH_SERVER_URL:-http://localhost:8080/oauth/authorize}
       - TOKEN_SERVER_URL=${TOKEN_SERVER_URL:-http://localhost:8080/oauth/token}
+      # Social login provider configurations (set your own credentials)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL:-http://localhost:8080/auth/google/callback}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GITHUB_REDIRECT_URL=${GITHUB_REDIRECT_URL:-http://localhost:8080/auth/github/callback}
+      - FACEBOOK_CLIENT_ID=${FACEBOOK_CLIENT_ID:-}
+      - FACEBOOK_CLIENT_SECRET=${FACEBOOK_CLIENT_SECRET:-}
+      - FACEBOOK_REDIRECT_URL=${FACEBOOK_REDIRECT_URL:-http://localhost:8080/auth/facebook/callback}
+      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
+      - APPLE_CLIENT_SECRET=${APPLE_CLIENT_SECRET:-}
+      - APPLE_REDIRECT_URL=${APPLE_REDIRECT_URL:-http://localhost:8080/auth/apple/callback}
     ports:
       - "${PORT:-8080}:8080"
     networks:

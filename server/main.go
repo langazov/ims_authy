@@ -45,12 +45,14 @@ func main() {
 	groupService := services.NewGroupService(db)
 	clientService := services.NewClientService(db)
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
+	socialAuthService := services.NewSocialAuthService(cfg, userService, db)
 
-	authHandler := handlers.NewAuthHandler(userService, oauthService)
+	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService)
 	userHandler := handlers.NewUserHandler(userService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
+	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, oauthService)
 
 	router := mux.NewRouter()
 
@@ -85,6 +87,13 @@ func main() {
 	oauth := router.PathPrefix("/oauth").Subrouter()
 	oauth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
 	oauth.HandleFunc("/token", authHandler.Token).Methods("POST")
+
+	// Social authentication routes
+	auth := router.PathPrefix("/auth").Subrouter()
+	auth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
+	auth.HandleFunc("/{provider}/login", socialAuthHandler.InitiateSocialLogin).Methods("GET")
+	auth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
+	auth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
 
 	router.HandleFunc("/login", authHandler.Login).Methods("POST")
 

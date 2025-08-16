@@ -42,6 +42,31 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate required fields
+	if createReq.Email == "" {
+		http.Error(w, "Email is required", http.StatusBadRequest)
+		return
+	}
+	if createReq.Password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+	if len(createReq.Password) < 6 {
+		http.Error(w, "Password must be at least 6 characters", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists
+	if existingUser, _ := h.userService.GetUserByEmail(createReq.Email); existingUser != nil {
+		http.Error(w, "User with this email already exists", http.StatusConflict)
+		return
+	}
+
+	// Set default scopes if none provided
+	if len(createReq.Scopes) == 0 {
+		createReq.Scopes = []string{"read", "openid", "profile", "email"}
+	}
+
 	user := &models.User{
 		Email:        createReq.Email,
 		Username:     createReq.Username,
@@ -57,6 +82,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clear password before returning
 	user.PasswordHash = ""
 
 	w.Header().Set("Content-Type", "application/json")

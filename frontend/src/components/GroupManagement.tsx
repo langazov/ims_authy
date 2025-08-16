@@ -25,13 +25,16 @@ export default function GroupManagement() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    group.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const safeGroups = groups || []
+  const safeUsers = users || []
+  
+  const filteredGroups = safeGroups.filter(group =>
+    group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group?.description?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const getGroupMemberCount = (groupId: string) => {
-    return users.filter((user: any) => user.groups?.includes(groupId)).length
+    return safeUsers.filter((user: any) => user?.groups?.includes(groupId)).length
   }
 
   const handleCreateGroup = (groupData: Omit<Group, 'id' | 'createdAt'>) => {
@@ -41,7 +44,7 @@ export default function GroupManagement() {
       createdAt: new Date().toISOString()
     }
     
-    setGroups([...groups, newGroup])
+    setGroups([...safeGroups, newGroup])
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'group' as const,
@@ -56,7 +59,7 @@ export default function GroupManagement() {
   const handleUpdateGroup = (groupData: Omit<Group, 'id' | 'createdAt'>) => {
     if (!selectedGroup) return
     
-    setGroups(groups.map(group =>
+    setGroups(safeGroups.map(group =>
       group.id === selectedGroup.id
         ? { ...group, ...groupData }
         : group
@@ -75,10 +78,10 @@ export default function GroupManagement() {
   }
 
   const handleDeleteGroup = (groupId: string) => {
-    const group = groups.find(g => g.id === groupId)
+    const group = safeGroups.find(g => g.id === groupId)
     if (!group) return
     
-    setGroups(groups.filter(g => g.id !== groupId))
+    setGroups(safeGroups.filter(g => g.id !== groupId))
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'group' as const,
@@ -128,7 +131,7 @@ export default function GroupManagement() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {filteredGroups.length} of {groups.length} groups
+              {filteredGroups.length} of {safeGroups.length} groups
             </p>
           </div>
         </CardHeader>
@@ -138,9 +141,9 @@ export default function GroupManagement() {
               <Users size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-medium mb-2">No groups found</h3>
               <p className="text-muted-foreground mb-4">
-                {groups.length === 0 ? 'Get started by creating your first group' : 'Try adjusting your search terms'}
+                {safeGroups.length === 0 ? 'Get started by creating your first group' : 'Try adjusting your search terms'}
               </p>
-              {groups.length === 0 && (
+              {safeGroups.length === 0 && (
                 <Button onClick={() => setIsDialogOpen(true)}>
                   <Plus size={16} className="mr-2" />
                   Create First Group
@@ -186,9 +189,9 @@ export default function GroupManagement() {
                     
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Permissions:</p>
-                      {group.scopes.length > 0 ? (
+                      {group.scopes?.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {group.scopes.map((scope) => (
+                          {(group.scopes || []).map((scope) => (
                             <Badge key={scope} variant="outline" className="text-xs">
                               {scope}
                             </Badge>

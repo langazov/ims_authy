@@ -31,10 +31,12 @@ export default function ClientManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set())
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.clientId.toLowerCase().includes(searchTerm.toLowerCase())
+  const safeClients = clients || []
+  
+  const filteredClients = safeClients.filter(client =>
+    client?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client?.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client?.clientId?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const generateClientCredentials = () => {
@@ -53,7 +55,7 @@ export default function ClientManagement() {
       createdAt: new Date().toISOString()
     }
     
-    setClients([...clients, newClient])
+    setClients([...safeClients, newClient])
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'client' as const,
@@ -69,7 +71,7 @@ export default function ClientManagement() {
   const handleUpdateClient = (clientData: Omit<OAuthClient, 'id' | 'clientId' | 'clientSecret' | 'createdAt'>) => {
     if (!selectedClient) return
     
-    setClients(clients.map(client =>
+    setClients(safeClients.map(client =>
       client.id === selectedClient.id
         ? { ...client, ...clientData }
         : client
@@ -89,10 +91,10 @@ export default function ClientManagement() {
   }
 
   const handleDeleteClient = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId)
+    const client = safeClients.find(c => c.id === clientId)
     if (!client) return
     
-    setClients(clients.filter(c => c.id !== clientId))
+    setClients(safeClients.filter(c => c.id !== clientId))
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'client' as const,
@@ -169,7 +171,7 @@ export default function ClientManagement() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {filteredClients.length} of {clients.length} clients
+              {filteredClients.length} of {safeClients.length} clients
             </p>
           </div>
         </CardHeader>
@@ -179,9 +181,9 @@ export default function ClientManagement() {
               <Plus size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-medium mb-2">No OAuth clients found</h3>
               <p className="text-muted-foreground mb-4">
-                {clients.length === 0 ? 'Get started by registering your first OAuth client' : 'Try adjusting your search terms'}
+                {safeClients.length === 0 ? 'Get started by registering your first OAuth client' : 'Try adjusting your search terms'}
               </p>
-              {clients.length === 0 && (
+              {safeClients.length === 0 && (
                 <Button onClick={() => setIsDialogOpen(true)}>
                   <Plus size={16} className="mr-2" />
                   Register First Client

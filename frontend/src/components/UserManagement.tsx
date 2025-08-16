@@ -12,12 +12,14 @@ import { apiClient } from '@/lib/api'
 interface User {
   id: string
   email: string
-  firstName: string
-  lastName: string
-  status: 'active' | 'inactive' | 'suspended'
+  username: string
+  first_name: string
+  last_name: string
+  active: boolean
   groups: string[]
-  createdAt: string
-  lastLogin?: string
+  scopes: string[]
+  created_at: string
+  updated_at: string
 }
 
 export default function UserManagement() {
@@ -36,10 +38,12 @@ export default function UserManagement() {
           apiClient.users.getAll(),
           apiClient.groups.getAll()
         ])
-        setUsers(usersData)
-        setGroups(groupsData)
+        setUsers(Array.isArray(usersData) ? usersData : [])
+        setGroups(Array.isArray(groupsData) ? groupsData : [])
       } catch (error) {
         console.error('Failed to fetch users:', error)
+        setUsers([])
+        setGroups([])
       } finally {
         setLoading(false)
       }
@@ -48,20 +52,23 @@ export default function UserManagement() {
     fetchData()
   }, [])
 
-  const filteredUsers = users.filter(user =>
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.lastName.toLowerCase().includes(searchTerm.toLowerCase())
+  const safeUsers = users || []
+  const filteredUsers = safeUsers.filter(user =>
+    user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user?.username?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleCreateUser = (userData: Omit<User, 'id' | 'createdAt'>) => {
+  const handleCreateUser = (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
     const newUser: User = {
       ...userData,
       id: `user_${Date.now()}`,
-      createdAt: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
     
-    setUsers([...users, newUser])
+    setUsers([...safeUsers, newUser])
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'user' as const,
@@ -73,12 +80,12 @@ export default function UserManagement() {
     setIsDialogOpen(false)
   }
 
-  const handleUpdateUser = (userData: Omit<User, 'id' | 'createdAt'>) => {
+  const handleUpdateUser = (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
     if (!selectedUser) return
     
-    setUsers(users.map(user =>
+    setUsers(safeUsers.map(user =>
       user.id === selectedUser.id
-        ? { ...user, ...userData }
+        ? { ...user, ...userData, updated_at: new Date().toISOString() }
         : user
     ))
     
@@ -95,10 +102,10 @@ export default function UserManagement() {
   }
 
   const handleDeleteUser = (userId: string) => {
-    const user = users.find(u => u.id === userId)
+    const user = safeUsers.find(u => u.id === userId)
     if (!user) return
     
-    setUsers(users.filter(u => u.id !== userId))
+    setUsers(safeUsers.filter(u => u.id !== userId))
     setActivity([{
       id: `activity_${Date.now()}`,
       type: 'user' as const,
@@ -108,17 +115,14 @@ export default function UserManagement() {
     }, ...activity])
   }
 
-  const getStatusBadgeColor = (status: User['status']) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800'
-      case 'suspended':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
+  const getStatusBadgeColor = (active: boolean) => {
+    return active 
+      ? 'bg-green-100 text-green-800'
+      : 'bg-gray-100 text-gray-800'
+  }
+
+  const getStatusText = (active: boolean) => {
+    return active ? 'Active' : 'Inactive'
   }
 
   return (
@@ -162,7 +166,7 @@ export default function UserManagement() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              {filteredUsers.length} of {users.length} users
+              {filteredUsers.length} of {safeUsers.length} users
             </p>
           </div>
         </CardHeader>
@@ -172,9 +176,9 @@ export default function UserManagement() {
               <Plus size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-medium mb-2">No users found</h3>
               <p className="text-muted-foreground mb-4">
-                {users.length === 0 ? 'Get started by creating your first user' : 'Try adjusting your search terms'}
+                {safeUsers.length === 0 ? 'Get started by creating your first user' : 'Try adjusting your search terms'}
               </p>
-              {users.length === 0 && (
+              {safeUsers.length === 0 && (
                 <Button onClick={() => setIsDialogOpen(true)}>
                   <Plus size={16} className="mr-2" />
                   Create First User
@@ -189,7 +193,7 @@ export default function UserManagement() {
                   <TableHead>Email</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Groups</TableHead>
-                  <TableHead>Last Login</TableHead>
+                  <TableHead>Created</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -198,20 +202,20 @@ export default function UserManagement() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{user.firstName} {user.lastName}</div>
-                        <div className="text-sm text-muted-foreground">ID: {user.id}</div>
+                        <div className="font-medium">{user.first_name} {user.last_name}</div>
+                        <div className="text-sm text-muted-foreground">@{user.username}</div>
                       </div>
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      <Badge className={getStatusBadgeColor(user.status)}>
-                        {user.status}
+                      <Badge className={getStatusBadgeColor(user.active)}>
+                        {getStatusText(user.active)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.groups.length > 0 ? (
+                      {user.groups?.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {user.groups.map((groupId) => {
+                          {(user.groups || []).map((groupId) => {
                             const group = groups.find((g: any) => g.id === groupId)
                             return (
                               <Badge key={groupId} variant="outline" className="text-xs">
@@ -225,11 +229,7 @@ export default function UserManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {user.lastLogin ? (
-                        <span className="text-sm">{new Date(user.lastLogin).toLocaleDateString()}</span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">Never</span>
-                      )}
+                      <span className="text-sm">{new Date(user.created_at).toLocaleDateString()}</span>
                     </TableCell>
                     <TableCell>
                       <div className="flex space-x-2">

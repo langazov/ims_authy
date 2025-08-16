@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,8 +11,9 @@ import (
 )
 
 type AuthHandler struct {
-	userService  *services.UserService
-	oauthService *services.OAuthService
+	userService       *services.UserService
+	oauthService      *services.OAuthService
+	socialAuthService *services.SocialAuthService
 }
 
 type LoginRequest struct {
@@ -27,10 +29,11 @@ type AuthorizeRequest struct {
 	State        string `json:"state"`
 }
 
-func NewAuthHandler(userService *services.UserService, oauthService *services.OAuthService) *AuthHandler {
+func NewAuthHandler(userService *services.UserService, oauthService *services.OAuthService, socialAuthService *services.SocialAuthService) *AuthHandler {
 	return &AuthHandler{
-		userService:  userService,
-		oauthService: oauthService,
+		userService:       userService,
+		oauthService:      oauthService,
+		socialAuthService: socialAuthService,
 	}
 }
 
@@ -130,52 +133,111 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 	codeChallenge := r.URL.Query().Get("code_challenge")
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
-	html := `
+	// Get enabled social providers
+	enabledProviders := h.socialAuthService.GetEnabledProviders()
+	socialButtons := ""
+	
+	for _, provider := range enabledProviders {
+		providerURL := fmt.Sprintf("/auth/%s/oauth?client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=%s",
+			provider, clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod)
+		
+		var buttonClass, buttonText string
+		switch provider {
+		case "google":
+			buttonClass = "google-btn"
+			buttonText = "Continue with Google"
+		case "github":
+			buttonClass = "github-btn"
+			buttonText = "Continue with GitHub"
+		case "facebook":
+			buttonClass = "facebook-btn"
+			buttonText = "Continue with Facebook"
+		case "apple":
+			buttonClass = "apple-btn"
+			buttonText = "Continue with Apple"
+		default:
+			buttonClass = "social-btn"
+			buttonText = "Continue with " + provider
+		}
+		
+		socialButtons += fmt.Sprintf(`
+			<a href="%s" class="social-button %s">%s</a>
+		`, providerURL, buttonClass, buttonText)
+	}
+
+	socialSection := ""
+	if socialButtons != "" {
+		socialSection = fmt.Sprintf(`
+		<div class="social-section">
+			%s
+		</div>
+		<div class="divider">or sign in with email</div>`, socialButtons)
+	}
+
+	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
     <title>OAuth2 Authorization</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .form-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; }
-        input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
-        button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; }
+        input[type="text"], input[type="email"], input[type="password"] { width: 100%%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        button { background: #007cba; color: white; padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; }
         button:hover { background: #005a87; }
-        .scopes { background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .scopes { background: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #007cba; }
+        .social-section { margin: 20px 0; }
+        .social-button { display: block; width: 100%%; padding: 12px; margin: 8px 0; text-decoration: none; border-radius: 6px; text-align: center; font-weight: 500; border: 1px solid #ddd; }
+        .google-btn { background: #4285f4; color: white; border-color: #4285f4; }
+        .github-btn { background: #333; color: white; border-color: #333; }
+        .facebook-btn { background: #1877f2; color: white; border-color: #1877f2; }
+        .apple-btn { background: #000; color: white; border-color: #000; }
+        .social-button:hover { opacity: 0.9; text-decoration: none; color: inherit; }
+        .divider { text-align: center; margin: 20px 0; color: #666; }
+        .button-group { display: flex; gap: 10px; margin-top: 20px; }
+        .button-group button { flex: 1; }
+        .deny-btn { background: #dc3545; }
+        .deny-btn:hover { background: #c82333; }
     </style>
 </head>
 <body>
-    <h2>Authorization Required</h2>
-    <p>Application is requesting access to your account.</p>
-    
-    <div class="scopes">
-        <strong>Requested permissions:</strong><br>
-        ` + scope + `
-    </div>
+    <div class="container">
+        <h2>Authorization Required</h2>
+        <p>Application is requesting access to your account.</p>
+        
+        <div class="scopes">
+            <strong>Requested permissions:</strong><br>
+            %s
+        </div>
 
-    <form method="post">
-        <div class="form-group">
-            <label for="email">Email:</label>
-            <input type="email" id="email" name="email" required>
-        </div>
-        <div class="form-group">
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-        </div>
-        
-        <input type="hidden" name="client_id" value="` + clientID + `">
-        <input type="hidden" name="redirect_uri" value="` + redirectURI + `">
-        <input type="hidden" name="response_type" value="code">
-        <input type="hidden" name="scope" value="` + scope + `">
-        <input type="hidden" name="state" value="` + state + `">
-        <input type="hidden" name="code_challenge" value="` + codeChallenge + `">
-        <input type="hidden" name="code_challenge_method" value="` + codeChallengeMethod + `">
-        <input type="hidden" name="user_id" id="user_id">
-        
-        <button type="button" onclick="authorize()">Authorize</button>
-        <button type="button" onclick="deny()">Deny</button>
-    </form>
+        %s
+
+        <form method="post">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <input type="hidden" name="client_id" value="%s">
+            <input type="hidden" name="redirect_uri" value="%s">
+            <input type="hidden" name="response_type" value="code">
+            <input type="hidden" name="scope" value="%s">
+            <input type="hidden" name="state" value="%s">
+            <input type="hidden" name="code_challenge" value="%s">
+            <input type="hidden" name="code_challenge_method" value="%s">
+            <input type="hidden" name="user_id" id="user_id">
+            
+            <div class="button-group">
+                <button type="button" onclick="authorize()">Authorize</button>
+                <button type="button" onclick="deny()" class="deny-btn">Deny</button>
+            </div>
+        </form>
 
     <script>
         async function authorize() {
@@ -209,15 +271,20 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
         }
 
         function deny() {
-            const redirectUri = '` + redirectURI + `';
-            const state = '` + state + `';
+            const redirectUri = '%s';
+            const state = '%s';
             let url = redirectUri + '?error=access_denied';
             if (state) url += '&state=' + encodeURIComponent(state);
             window.location.href = url;
         }
     </script>
+    </div>
 </body>
-</html>`
+</html>`,
+        scope,
+        socialSection,
+        clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod,
+        redirectURI, state)
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(html))

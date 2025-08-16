@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [clients, setClients] = useState<any[]>([])
   const [activity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -28,11 +29,18 @@ export default function Dashboard() {
           apiClient.clients.getAll()
         ])
         
-        setUsers(usersData)
-        setGroups(groupsData)
-        setClients(clientsData)
+        // Ensure we always have arrays, even if API returns null
+        setUsers(Array.isArray(usersData) ? usersData : [])
+        setGroups(Array.isArray(groupsData) ? groupsData : [])
+        setClients(Array.isArray(clientsData) ? clientsData : [])
+        setError(null)
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error)
+        setError('Failed to load dashboard data')
+        // Keep arrays as empty arrays even on error
+        setUsers([])
+        setGroups([])
+        setClients([])
       } finally {
         setLoading(false)
       }
@@ -41,28 +49,33 @@ export default function Dashboard() {
     fetchData()
   }, [])
 
-  const activeUsers = users.filter((user: any) => user.active).length
-  const recentActivity = activity.slice(0, 5)
+  const safeUsers = users || []
+  const safeGroups = groups || []
+  const safeClients = clients || []
+  const safeActivity = activity || []
+  
+  const activeUsers = safeUsers.filter((user: any) => user?.active).length
+  const recentActivity = safeActivity.slice(0, 5)
 
   const stats = [
     {
       title: 'Total Users',
-      value: users.length.toString(),
-  icon: Group,
+      value: safeUsers.length.toString(),
+      icon: Group,
       description: `${activeUsers} active users`,
       trend: '+12% from last month'
     },
     {
       title: 'User Groups',
-      value: groups.length.toString(),
-  icon: ShieldClose,
+      value: safeGroups.length.toString(),
+      icon: ShieldClose,
       description: 'Permission groups',
       trend: '+2 new groups'
     },
     {
       title: 'OAuth Clients',
-      value: clients.length.toString(),
-  icon: Cog,
+      value: safeClients.length.toString(),
+      icon: Cog,
       description: 'Registered applications',
       trend: '3 pending approval'
     },
@@ -84,6 +97,28 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">Overview of your OAuth2 server activity and statistics</p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     )

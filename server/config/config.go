@@ -7,6 +7,13 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type SocialProvider struct {
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	Enabled      bool
+}
+
 type Config struct {
 	Port           string
 	MongoURI       string
@@ -17,6 +24,12 @@ type Config struct {
 	RedirectURL    string
 	AuthServerURL  string
 	TokenServerURL string
+	
+	// Social login providers
+	Google   SocialProvider
+	GitHub   SocialProvider
+	Facebook SocialProvider
+	Apple    SocialProvider
 }
 
 func Load() (*Config, error) {
@@ -32,6 +45,32 @@ func Load() (*Config, error) {
 		RedirectURL:    getEnv("REDIRECT_URL", "http://localhost:8080/callback"),
 		AuthServerURL:  getEnv("AUTH_SERVER_URL", "http://localhost:8080/oauth/authorize"),
 		TokenServerURL: getEnv("TOKEN_SERVER_URL", "http://localhost:8080/oauth/token"),
+		
+		// Social login providers configuration
+		Google: SocialProvider{
+			ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/auth/google/callback"),
+			Enabled:      getEnv("GOOGLE_CLIENT_ID", "") != "",
+		},
+		GitHub: SocialProvider{
+			ClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+			ClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("GITHUB_REDIRECT_URL", "http://localhost:8080/auth/github/callback"),
+			Enabled:      getEnv("GITHUB_CLIENT_ID", "") != "",
+		},
+		Facebook: SocialProvider{
+			ClientID:     getEnv("FACEBOOK_CLIENT_ID", ""),
+			ClientSecret: getEnv("FACEBOOK_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("FACEBOOK_REDIRECT_URL", "http://localhost:8080/auth/facebook/callback"),
+			Enabled:      getEnv("FACEBOOK_CLIENT_ID", "") != "",
+		},
+		Apple: SocialProvider{
+			ClientID:     getEnv("APPLE_CLIENT_ID", ""),
+			ClientSecret: getEnv("APPLE_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("APPLE_REDIRECT_URL", "http://localhost:8080/auth/apple/callback"),
+			Enabled:      getEnv("APPLE_CLIENT_ID", "") != "",
+		},
 	}
 
 	return config, nil

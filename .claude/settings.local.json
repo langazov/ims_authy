@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(GITHUB_CLIENT_ID=test-id docker-compose up -d oauth2-server)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

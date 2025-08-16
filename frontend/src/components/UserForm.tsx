@@ -8,12 +8,14 @@ import { Checkbox } from '@/components/ui/checkbox'
 interface User {
   id: string
   email: string
-  firstName: string
-  lastName: string
-  status: 'active' | 'inactive' | 'suspended'
+  username: string
+  first_name: string
+  last_name: string
+  active: boolean
   groups: string[]
-  createdAt: string
-  lastLogin?: string
+  scopes: string[]
+  created_at: string
+  updated_at: string
 }
 
 interface Group {
@@ -26,17 +28,20 @@ interface Group {
 interface UserFormProps {
   user?: User | null
   groups: Group[]
-  onSubmit: (userData: Omit<User, 'id' | 'createdAt'>) => void
+  onSubmit: (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => void
   onCancel: () => void
 }
 
 export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormProps) {
+  const safeGroups = groups || []
   const [formData, setFormData] = useState({
     email: user?.email || '',
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
-    status: user?.status || 'active' as const,
-    groups: user?.groups || []
+    username: user?.username || '',
+    first_name: user?.first_name || '',
+    last_name: user?.last_name || '',
+    active: user?.active ?? true,
+    groups: user?.groups || [],
+    scopes: user?.scopes || ['read', 'openid', 'profile', 'email']
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -65,8 +70,8 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
           <Label htmlFor="firstName">First Name</Label>
           <Input
             id="firstName"
-            value={formData.firstName}
-            onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+            value={formData.first_name}
+            onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
             required
           />
         </div>
@@ -74,11 +79,21 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
           <Label htmlFor="lastName">Last Name</Label>
           <Input
             id="lastName"
-            value={formData.lastName}
-            onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+            value={formData.last_name}
+            onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
             required
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
+          value={formData.username}
+          onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+          required
+        />
       </div>
 
       <div className="space-y-2">
@@ -94,23 +109,22 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
 
       <div className="space-y-2">
         <Label htmlFor="status">Status</Label>
-        <Select value={formData.status} onValueChange={(value: any) => setFormData(prev => ({ ...prev, status: value }))}>
+        <Select value={formData.active ? "active" : "inactive"} onValueChange={(value) => setFormData(prev => ({ ...prev, active: value === "active" }))}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {groups.length > 0 && (
+      {safeGroups.length > 0 && (
         <div className="space-y-2">
           <Label>Groups</Label>
           <div className="space-y-2 max-h-32 overflow-y-auto">
-            {groups.map((group) => (
+            {safeGroups.map((group) => (
               <div key={group.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={`group-${group.id}`}
