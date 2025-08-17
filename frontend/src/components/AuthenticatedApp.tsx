@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
-import { ShieldClose, Group, Cog, ChartColumn, LogOut, Users, Settings } from 'lucide-react'
+import { ShieldClose, Group, Cog, ChartColumn, LogOut, Users, Settings, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -11,6 +11,7 @@ import GroupManagement from '@/components/GroupManagement'
 import ClientManagement from '@/components/ClientManagement'
 import SocialLoginSetup from '@/components/SocialLoginSetup'
 import ScopeManagement from '@/components/ScopeManagement'
+import UserProfile from '@/components/UserProfile'
 
 export default function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -20,6 +21,7 @@ export default function AuthenticatedApp() {
   // Available tabs based on permissions
   const availableTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: ChartColumn, component: Dashboard, available: true },
+    { id: 'profile', label: 'Profile', icon: User, component: UserProfile, available: true },
     { id: 'users', label: 'Users', icon: Users, component: UserManagement, available: canManageUsers() },
     { id: 'groups', label: 'Groups', icon: Group, component: GroupManagement, available: canManageGroups() },
     { id: 'clients', label: 'OAuth Clients', icon: Cog, component: ClientManagement, available: canManageClients() },

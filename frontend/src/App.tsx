@@ -1,6 +1,6 @@
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import AuthenticatedApp from '@/components/AuthenticatedApp'
-import LoginPage from '@/components/LoginPage'
+import EnhancedLoginPage from '@/components/EnhancedLoginPage'
 import CallbackPage from '@/components/CallbackPage'
 
 function AppContent() {
@@ -22,7 +22,7 @@ function AppContent() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage />
+    return <EnhancedLoginPage />
   }
 
   return <AuthenticatedApp />

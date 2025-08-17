@@ -5,6 +5,7 @@ export interface User {
   email: string
   scopes: string[]
   groups: string[]
+  two_factor_verified?: boolean
 }
 
 export interface AuthTokens {
@@ -143,6 +144,12 @@ class AuthService {
   }
 
   async getCurrentUser(): Promise<User> {
+    // Check for direct login user first
+    const directUser = localStorage.getItem('direct_login_user')
+    if (directUser) {
+      return JSON.parse(directUser)
+    }
+
     const tokens = this.getStoredTokens()
     if (!tokens) {
       throw new Error('No tokens available')
@@ -188,6 +195,12 @@ class AuthService {
   }
 
   isAuthenticated(): boolean {
+    // Check for direct login user
+    const directUser = localStorage.getItem('direct_login_user')
+    if (directUser) {
+      return true
+    }
+
     const tokens = this.getStoredTokens()
     if (!tokens) return false
 
@@ -201,11 +214,56 @@ class AuthService {
     return false
   }
 
+  async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          two_fa_code: twoFACode,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        return { success: false, error: errorText }
+      }
+
+      const data = await response.json()
+      
+      if (data.two_factor_required) {
+        return { success: false, twoFactorRequired: true }
+      }
+
+      // For direct login, we don't get OAuth tokens, so we store user data differently
+      const user: User = {
+        id: data.user_id,
+        email: data.email,
+        scopes: data.scopes || [],
+        groups: data.groups || [],
+        two_factor_verified: data.two_factor_verified || false,
+      }
+
+      // Store user data temporarily (this would need better token management in production)
+      localStorage.setItem('direct_login_user', JSON.stringify(user))
+      
+      return { success: true, user }
+    } catch (error) {
+      console.error('[auth] directLogin failed:', error)
+      return { success: false, error: 'Login failed' }
+    }
+  }
+
   logout(): void {
   console.info('[auth] logout')
   localStorage.removeItem(this.STORAGE_KEY)
   localStorage.removeItem(this.CODE_VERIFIER_KEY)
   localStorage.removeItem('oauth_state')
+  localStorage.removeItem('direct_login_user')
   }
 
   async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {

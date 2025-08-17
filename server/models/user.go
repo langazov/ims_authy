@@ -7,17 +7,20 @@ import (
 )
 
 type User struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	Email       string             `bson:"email" json:"email"`
-	Username    string             `bson:"username" json:"username"`
-	PasswordHash string            `bson:"password_hash" json:"-"`
-	FirstName   string             `bson:"first_name" json:"first_name"`
-	LastName    string             `bson:"last_name" json:"last_name"`
-	Groups      []string           `bson:"groups" json:"groups"`
-	Scopes      []string           `bson:"scopes" json:"scopes"`
-	Active      bool               `bson:"active" json:"active"`
-	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
+	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Email            string             `bson:"email" json:"email"`
+	Username         string             `bson:"username" json:"username"`
+	PasswordHash     string             `bson:"password_hash" json:"-"`
+	FirstName        string             `bson:"first_name" json:"first_name"`
+	LastName         string             `bson:"last_name" json:"last_name"`
+	Groups           []string           `bson:"groups" json:"groups"`
+	Scopes           []string           `bson:"scopes" json:"scopes"`
+	Active           bool               `bson:"active" json:"active"`
+	TwoFactorEnabled bool               `bson:"two_factor_enabled" json:"two_factor_enabled"`
+	TwoFactorSecret  string             `bson:"two_factor_secret" json:"-"`
+	BackupCodes      []string           `bson:"backup_codes" json:"-"`
+	CreatedAt        time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt        time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
 type Group struct {
@@ -90,4 +93,14 @@ type Scope struct {
 	Active      bool               `bson:"active" json:"active"`
 	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
+}
+
+type TwoFactorSession struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	UserID    string             `bson:"user_id" json:"user_id"`
+	ClientID  string             `bson:"client_id" json:"client_id"`
+	SessionID string             `bson:"session_id" json:"session_id"`
+	Verified  bool               `bson:"verified" json:"verified"`
+	ExpiresAt time.Time          `bson:"expires_at" json:"expires_at"`
+	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }

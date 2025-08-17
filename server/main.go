@@ -47,19 +47,21 @@ func main() {
 	scopeService := services.NewScopeService(db.Database)
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
 	socialAuthService := services.NewSocialAuthService(cfg, userService, db)
+	twoFactorService := services.NewTwoFactorService(db)
 
 	// Initialize default scopes if none exist
 	if err := scopeService.InitializeDefaultScopes(); err != nil {
 		log.Printf("Warning: Failed to initialize default scopes: %v", err)
 	}
 
-	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService)
+	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
 	userHandler := handlers.NewUserHandler(userService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
 	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
 	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, oauthService)
+	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService)
 
 	router := mux.NewRouter()
 
@@ -96,6 +98,14 @@ func main() {
 	api.HandleFunc("/scopes/{id}", scopeHandler.HandleOptions).Methods("OPTIONS")
 
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetDashboardStats).Methods("GET")
+
+	// Two-factor authentication endpoints
+	api.HandleFunc("/2fa/setup", twoFactorHandler.SetupTwoFactor).Methods("POST")
+	api.HandleFunc("/2fa/enable", twoFactorHandler.EnableTwoFactor).Methods("POST")
+	api.HandleFunc("/2fa/disable", twoFactorHandler.DisableTwoFactor).Methods("POST")
+	api.HandleFunc("/2fa/verify", twoFactorHandler.VerifyTwoFactor).Methods("POST")
+	api.HandleFunc("/2fa/verify-session", twoFactorHandler.VerifySession).Methods("POST")
+	api.HandleFunc("/2fa/status", twoFactorHandler.GetTwoFactorStatus).Methods("GET")
 
 	// Social provider management endpoints
 	api.HandleFunc("/social/providers", socialAuthHandler.GetProviderConfigs).Methods("GET")

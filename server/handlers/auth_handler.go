@@ -14,11 +14,13 @@ type AuthHandler struct {
 	userService       *services.UserService
 	oauthService      *services.OAuthService
 	socialAuthService *services.SocialAuthService
+	twoFactorService  *services.TwoFactorService
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	TwoFACode string `json:"two_fa_code,omitempty"`
 }
 
 type AuthorizeRequest struct {
@@ -29,11 +31,12 @@ type AuthorizeRequest struct {
 	State        string `json:"state"`
 }
 
-func NewAuthHandler(userService *services.UserService, oauthService *services.OAuthService, socialAuthService *services.SocialAuthService) *AuthHandler {
+func NewAuthHandler(userService *services.UserService, oauthService *services.OAuthService, socialAuthService *services.SocialAuthService, twoFactorService *services.TwoFactorService) *AuthHandler {
 	return &AuthHandler{
 		userService:       userService,
 		oauthService:      oauthService,
 		socialAuthService: socialAuthService,
+		twoFactorService:  twoFactorService,
 	}
 }
 
@@ -65,11 +68,40 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if 2FA is required
+	twoFactorRequired, err := h.twoFactorService.IsTwoFactorRequired(user.ID.Hex())
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if twoFactorRequired {
+		if loginReq.TwoFACode == "" {
+			// First step: credentials verified, but 2FA required
+			response := map[string]interface{}{
+				"two_factor_required": true,
+				"user_id":            user.ID.Hex(),
+				"message":            "Two-factor authentication required",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Second step: verify 2FA code
+		valid, err := h.twoFactorService.VerifyTwoFactor(user.ID.Hex(), loginReq.TwoFACode)
+		if err != nil || !valid {
+			http.Error(w, "Invalid two-factor authentication code", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	response := map[string]interface{}{
 		"user_id": user.ID.Hex(),
 		"email":   user.Email,
 		"scopes":  user.Scopes,
 		"groups":  user.Groups,
+		"two_factor_verified": twoFactorRequired,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

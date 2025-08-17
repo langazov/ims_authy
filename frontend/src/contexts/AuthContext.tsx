@@ -6,6 +6,7 @@ interface AuthContextType {
   isLoading: boolean
   isAuthenticated: boolean
   login: () => void
+  directLogin: (email: string, password: string, twoFACode?: string) => Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }>
   loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple') => void
   logout: () => void
   handleCallback: (code: string, state: string) => Promise<void>
@@ -48,6 +49,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     authService.startLogin()
   }
 
+  const directLogin = async (email: string, password: string, twoFACode?: string) => {
+    console.info('[AuthContext] direct login requested', { email })
+    const result = await authService.directLogin(email, password, twoFACode)
+    if (result.success && result.user) {
+      setUser(result.user)
+    }
+    return result
+  }
+
   const loginWithSocial = (provider: 'google' | 'github' | 'facebook' | 'apple') => {
     console.info('[AuthContext] social login requested', { provider })
     authService.startSocialLogin(provider)
@@ -78,6 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading,
     isAuthenticated: !!user,
     login,
+    directLogin,
     loginWithSocial,
     logout,
     handleCallback
