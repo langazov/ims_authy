@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Search, Edit, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import UserForm from './UserForm'
 import { apiClient } from '@/lib/api'
 import AccessDenied from './AccessDenied'
@@ -74,59 +75,79 @@ export default function UserManagement() {
     user?.username?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleCreateUser = (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
-    const newUser: User = {
-      ...userData,
-      id: `user_${Date.now()}`,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+  const handleCreateUser = async (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const newUser = await apiClient.users.create(userData)
+      setUsers([...safeUsers, newUser])
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'user' as const,
+        action: 'Created user',
+        target: userData.email,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
+      
+      setIsDialogOpen(false)
+      toast.success('User created successfully')
+    } catch (error) {
+      console.error('Failed to create user:', error)
+      toast.error('Failed to create user')
+      // Keep dialog open on error
     }
-    
-    setUsers([...safeUsers, newUser])
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'user' as const,
-      action: 'Created user',
-      target: userData.email,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateUser = (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
+  const handleUpdateUser = async (userData: Omit<User, 'id' | 'created_at' | 'updated_at'>) => {
     if (!selectedUser) return
     
-    setUsers(safeUsers.map(user =>
-      user.id === selectedUser.id
-        ? { ...user, ...userData, updated_at: new Date().toISOString() }
-        : user
-    ))
-    
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'user' as const,
-      action: 'Updated user',
-      target: userData.email,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setSelectedUser(null)
-    setIsDialogOpen(false)
+    try {
+      const updatedUser = await apiClient.users.update(selectedUser.id, userData)
+      setUsers(safeUsers.map(user =>
+        user.id === selectedUser.id
+          ? { ...user, ...updatedUser, updated_at: new Date().toISOString() }
+          : user
+      ))
+      
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'user' as const,
+        action: 'Updated user',
+        target: userData.email,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
+      
+      setSelectedUser(null)
+      setIsDialogOpen(false)
+      toast.success('User updated successfully')
+    } catch (error) {
+      console.error('Failed to update user:', error)
+      toast.error('Failed to update user')
+      // Keep dialog open on error
+    }
   }
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     const user = safeUsers.find(u => u.id === userId)
     if (!user) return
     
-    setUsers(safeUsers.filter(u => u.id !== userId))
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'user' as const,
-      action: 'Deleted user',
-      target: user.email,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
+    if (!confirm(`Are you sure you want to delete user "${user.email}"? This action cannot be undone.`)) {
+      return
+    }
+    
+    try {
+      await apiClient.users.delete(userId)
+      setUsers(safeUsers.filter(u => u.id !== userId))
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'user' as const,
+        action: 'Deleted user',
+        target: user.email,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
+      toast.success('User deleted successfully')
+    } catch (error) {
+      console.error('Failed to delete user:', error)
+      toast.error('Failed to delete user')
+    }
   }
 
   const getStatusBadgeColor = (active: boolean) => {
@@ -235,11 +256,11 @@ export default function UserManagement() {
                     <TableCell>
                       {user.groups?.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {(user.groups || []).map((groupId) => {
-                            const group = groups.find((g: any) => g.id === groupId)
+                          {(user.groups || []).map((groupName) => {
+                            const group = groups.find((g: any) => g.name === groupName)
                             return (
-                              <Badge key={groupId} variant="outline" className="text-xs">
-                                {group?.name || groupId}
+                              <Badge key={groupName} variant="outline" className="text-xs">
+                                {group?.name || groupName}
                               </Badge>
                             )
                           })}
