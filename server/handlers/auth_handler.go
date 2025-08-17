@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 )
 
@@ -46,13 +47,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	var loginReq LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	user, err := h.userService.GetUserByEmail(loginReq.Email)
+	user, err := h.userService.GetUserByEmailAndTenant(loginReq.Email, tenantID)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -97,7 +105,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate OAuth tokens for successful login
-	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), user.Scopes)
+	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), tenantID, user.Scopes)
 	if err != nil {
 		http.Error(w, "Failed to generate authentication tokens", http.StatusInternalServerError)
 		return
@@ -127,6 +135,13 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	clientID := r.FormValue("client_id")
 	redirectURI := r.FormValue("redirect_uri")
 	responseType := r.FormValue("response_type")
@@ -143,8 +158,8 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	requestedScopes := strings.Fields(scope)
 
-	// Get user's actual permissions from database
-	user, err := h.userService.GetUserByID(userID)
+	// Get user's actual permissions from database within tenant context
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
@@ -166,7 +181,7 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		grantedScopes = []string{"read"}
 	}
 
-	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, grantedScopes, codeChallenge, codeChallengeMethod)
+	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, tenantID, redirectURI, grantedScopes, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
 		return

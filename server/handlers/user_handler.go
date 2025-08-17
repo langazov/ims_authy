@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
 
@@ -49,6 +50,13 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	var createReq CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -69,8 +77,8 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user already exists
-	if existingUser, _ := h.userService.GetUserByEmail(createReq.Email); existingUser != nil {
+	// Check if user already exists in this tenant
+	if existingUser, _ := h.userService.GetUserByEmailAndTenant(createReq.Email, tenantID); existingUser != nil {
 		http.Error(w, "User with this email already exists", http.StatusConflict)
 		return
 	}
@@ -81,6 +89,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{
+		TenantID:     tenantID,
 		Email:        createReq.Email,
 		Username:     createReq.Username,
 		PasswordHash: createReq.Password,
@@ -109,7 +118,14 @@ func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.userService.GetAllUsers()
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
+	users, err := h.userService.GetAllUsersByTenant(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get users: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -129,10 +145,17 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	user, err := h.userService.GetUserByID(userID)
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -150,6 +173,13 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
@@ -160,6 +190,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{
+		TenantID:  tenantID,
 		Email:     updateReq.Email,
 		Username:  updateReq.Username,
 		FirstName: updateReq.FirstName,
@@ -169,7 +200,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		Scopes:    updateReq.Scopes,
 	}
 
-	if err := h.userService.UpdateUser(userID, user); err != nil {
+	if err := h.userService.UpdateUserInTenant(userID, tenantID, user); err != nil {
 		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -186,10 +217,17 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	if err := h.userService.DeleteUser(userID); err != nil {
+	if err := h.userService.DeleteUserInTenant(userID, tenantID); err != nil {
 		http.Error(w, "Failed to delete user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -204,6 +242,13 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	// Extract user ID from JWT token in Authorization header
 	userID, err := h.extractUserIDFromToken(r)
 	if err != nil {
@@ -211,8 +256,8 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get fresh user data from database
-	user, err := h.userService.GetUserByID(userID)
+	// Get fresh user data from database within tenant context
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -221,6 +266,7 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Return fresh user data
 	response := map[string]interface{}{
 		"id":         user.ID.Hex(),
+		"tenant_id":  user.TenantID,
 		"email":      user.Email,
 		"username":   user.Username,
 		"first_name": user.FirstName,

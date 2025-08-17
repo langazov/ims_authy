@@ -5,6 +5,7 @@ export interface User {
   email: string
   scopes: string[]
   groups: string[]
+  tenant_id?: string
   two_factor_verified?: boolean
 }
 
@@ -151,7 +152,8 @@ class AuthService {
         id: payload.sub,
         email: payload.email,
         scopes: payload.scopes || [],
-        groups: payload.groups || []
+        groups: payload.groups || [],
+        tenant_id: payload.tenant_id
       }
     }
 
@@ -177,7 +179,8 @@ class AuthService {
         id: userData.id,
         email: userData.email,
         scopes: userData.scopes || [],
-        groups: userData.groups || []
+        groups: userData.groups || [],
+        tenant_id: userData.tenant_id
       }
       
       return refreshedUser
@@ -293,10 +296,22 @@ class AuthService {
       throw new Error('No authentication tokens available')
     }
 
-    const headers = {
-      ...options.headers,
+    const headers: Record<string, string> = {
       'Authorization': `Bearer ${tokens.access_token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {})
+    }
+
+    // Add tenant ID header if available
+    if (tokens.id_token) {
+      try {
+        const payload = this.parseJwtPayload(tokens.id_token)
+        if (payload.tenant_id) {
+          headers['X-Tenant-ID'] = payload.tenant_id
+        }
+      } catch (error) {
+        console.warn('[auth] Failed to parse ID token for tenant ID:', error)
+      }
     }
 
     console.debug('[auth] makeAuthenticatedRequest', { url, method: options.method || 'GET' })

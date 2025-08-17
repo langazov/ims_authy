@@ -7,6 +7,7 @@ import (
 	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
 	"oauth2-openid-server/handlers"
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 
 	"github.com/gorilla/mux"
@@ -41,6 +42,7 @@ func main() {
 	}
 	defer db.Close()
 
+	tenantService := services.NewTenantService(db)
 	userService := services.NewUserService(db)
 	groupService := services.NewGroupService(db)
 	clientService := services.NewClientService(db)
@@ -48,6 +50,11 @@ func main() {
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
 	socialAuthService := services.NewSocialAuthService(userService, db)
 	twoFactorService := services.NewTwoFactorService(db)
+
+	// Initialize default tenant if none exist
+	if err := tenantService.InitializeDefaultTenant(); err != nil {
+		log.Printf("Warning: Failed to initialize default tenant: %v", err)
+	}
 
 	// Initialize default scopes if none exist
 	if err := scopeService.InitializeDefaultScopes(); err != nil {
@@ -61,6 +68,7 @@ func main() {
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
+	tenantHandler := handlers.NewTenantHandler(tenantService)
 	userHandler := handlers.NewUserHandler(userService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -71,8 +79,18 @@ func main() {
 
 	router := mux.NewRouter()
 
+	// Apply tenant middleware to all API routes
 	api := router.PathPrefix("/api/v1").Subrouter()
+	api.Use(middleware.TenantMiddleware(tenantService))
 	
+	// Tenant management endpoints (super admin only in production)
+	api.HandleFunc("/tenants", tenantHandler.CreateTenant).Methods("POST")
+	api.HandleFunc("/tenants", tenantHandler.GetTenants).Methods("GET")
+	api.HandleFunc("/tenants/{id}", tenantHandler.GetTenant).Methods("GET")
+	api.HandleFunc("/tenants/{id}", tenantHandler.UpdateTenant).Methods("PUT")
+	api.HandleFunc("/tenants/{id}", tenantHandler.DeleteTenant).Methods("DELETE")
+
+	// User management endpoints (tenant-scoped)
 	api.HandleFunc("/users", userHandler.CreateUser).Methods("POST")
 	api.HandleFunc("/users", userHandler.GetUsers).Methods("GET")
 	api.HandleFunc("/users/me", userHandler.GetCurrentUser).Methods("GET")
@@ -119,12 +137,15 @@ func main() {
 	api.HandleFunc("/social/providers/{provider}", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
 	api.HandleFunc("/social/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
 
+	// OAuth routes with tenant middleware
 	oauth := router.PathPrefix("/oauth").Subrouter()
+	oauth.Use(middleware.TenantMiddleware(tenantService))
 	oauth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
 	oauth.HandleFunc("/token", authHandler.Token).Methods("POST")
 
-	// Social authentication routes
+	// Social authentication routes with tenant middleware
 	auth := router.PathPrefix("/auth").Subrouter()
+	auth.Use(middleware.TenantMiddleware(tenantService))
 	auth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
 	auth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
 	auth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
@@ -133,7 +154,10 @@ func main() {
 	auth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
 	auth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
 
-	router.HandleFunc("/login", authHandler.Login).Methods("POST")
+	// Direct login route with tenant middleware
+	loginRouter := router.PathPrefix("/login").Subrouter()
+	loginRouter.Use(middleware.TenantMiddleware(tenantService))
+	loginRouter.HandleFunc("", authHandler.Login).Methods("POST")
 
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

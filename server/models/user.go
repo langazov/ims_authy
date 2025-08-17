@@ -6,8 +6,34 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+type Tenant struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Name        string             `bson:"name" json:"name"`
+	Domain      string             `bson:"domain" json:"domain"` // e.g., "acme.com" or "tenant1"
+	Subdomain   string             `bson:"subdomain" json:"subdomain"` // e.g., "acme" for "acme.auth-server.com"
+	Active      bool               `bson:"active" json:"active"`
+	Settings    TenantSettings     `bson:"settings" json:"settings"`
+	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
+}
+
+type TenantSettings struct {
+	AllowUserRegistration bool               `bson:"allow_user_registration" json:"allow_user_registration"`
+	RequireTwoFactor     bool               `bson:"require_two_factor" json:"require_two_factor"`
+	SessionTimeout       int                `bson:"session_timeout" json:"session_timeout"` // in minutes
+	CustomBranding       TenantBranding     `bson:"custom_branding" json:"custom_branding"`
+}
+
+type TenantBranding struct {
+	LogoURL     string `bson:"logo_url" json:"logo_url"`
+	CompanyName string `bson:"company_name" json:"company_name"`
+	PrimaryColor string `bson:"primary_color" json:"primary_color"`
+	SecondaryColor string `bson:"secondary_color" json:"secondary_color"`
+}
+
 type User struct {
 	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID         string             `bson:"tenant_id" json:"tenant_id"`
 	Email            string             `bson:"email" json:"email"`
 	Username         string             `bson:"username" json:"username"`
 	PasswordHash     string             `bson:"password_hash" json:"-"`
@@ -25,6 +51,7 @@ type User struct {
 
 type Group struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID    string             `bson:"tenant_id" json:"tenant_id"`
 	Name        string             `bson:"name" json:"name"`
 	Description string             `bson:"description" json:"description"`
 	Scopes      []string           `bson:"scopes" json:"scopes"`
@@ -35,6 +62,7 @@ type Group struct {
 
 type Client struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID     string             `bson:"tenant_id" json:"tenant_id"`
 	ClientID     string             `bson:"client_id" json:"client_id"`
 	ClientSecret string             `bson:"client_secret" json:"-"`
 	Name         string             `bson:"name" json:"name"`
@@ -49,6 +77,7 @@ type Client struct {
 
 type AuthorizationCode struct {
 	ID                  primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID            string             `bson:"tenant_id" json:"tenant_id"`
 	Code                string             `bson:"code" json:"code"`
 	ClientID            string             `bson:"client_id" json:"client_id"`
 	UserID              string             `bson:"user_id" json:"user_id"`
@@ -63,6 +92,7 @@ type AuthorizationCode struct {
 
 type AccessToken struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID  string             `bson:"tenant_id" json:"tenant_id"`
 	Token     string             `bson:"token" json:"token"`
 	ClientID  string             `bson:"client_id" json:"client_id"`
 	UserID    string             `bson:"user_id" json:"user_id"`
@@ -74,6 +104,7 @@ type AccessToken struct {
 
 type RefreshToken struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID    string             `bson:"tenant_id" json:"tenant_id"`
 	Token       string             `bson:"token" json:"token"`
 	AccessToken string             `bson:"access_token" json:"access_token"`
 	ClientID    string             `bson:"client_id" json:"client_id"`
@@ -86,6 +117,7 @@ type RefreshToken struct {
 
 type Scope struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID    string             `bson:"tenant_id" json:"tenant_id"`
 	Name        string             `bson:"name" json:"name"`
 	DisplayName string             `bson:"display_name" json:"display_name"`
 	Description string             `bson:"description" json:"description"`
@@ -97,6 +129,7 @@ type Scope struct {
 
 type TwoFactorSession struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID  string             `bson:"tenant_id" json:"tenant_id"`
 	UserID    string             `bson:"user_id" json:"user_id"`
 	ClientID  string             `bson:"client_id" json:"client_id"`
 	SessionID string             `bson:"session_id" json:"session_id"`
@@ -107,6 +140,7 @@ type TwoFactorSession struct {
 
 type SocialProvider struct {
 	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	TenantID     string             `bson:"tenant_id" json:"tenant_id"`
 	Name         string             `bson:"name" json:"name"`                 // google, github, facebook, apple
 	DisplayName  string             `bson:"display_name" json:"display_name"` // Google, GitHub, Facebook, Apple
 	ClientID     string             `bson:"client_id" json:"client_id"`

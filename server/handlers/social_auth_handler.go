@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 
 	"github.com/gorilla/mux"
@@ -87,6 +88,13 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	provider := vars["provider"]
 
@@ -164,6 +172,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		authCode, err := h.oauthService.CreateAuthorizationCode(
 			clientID,
 			user.ID.Hex(),
+			tenantID,
 			redirectURI,
 			scopes,
 			codeChallenge,
