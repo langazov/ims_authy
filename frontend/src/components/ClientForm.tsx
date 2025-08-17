@@ -9,41 +9,55 @@ import { Trash2, Plus } from 'lucide-react'
 
 interface OAuthClient {
   id: string
+  client_id: string
   name: string
   description: string
-  clientId: string
-  clientSecret: string
-  redirectUris: string[]
+  redirect_uris: string[]
   scopes: string[]
-  type: 'confidential' | 'public'
-  status: 'active' | 'inactive'
-  createdAt: string
+  grant_types: string[]
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+interface ClientFormData {
+  name: string
+  description: string
+  redirect_uris: string[]
+  scopes: string[]
+  grant_types: string[]
+  active: boolean
 }
 
 interface ClientFormProps {
   client?: OAuthClient | null
-  onSubmit: (clientData: Omit<OAuthClient, 'id' | 'clientId' | 'clientSecret' | 'createdAt'>) => void
+  onSubmit: (clientData: ClientFormData) => void
   onCancel: () => void
 }
 
 const AVAILABLE_SCOPES = [
+  'read',
+  'write',
   'openid',
   'profile',
   'email',
-  'offline_access',
-  'read:users',
-  'write:users',
-  'admin:system'
+  'admin'
+]
+
+const AVAILABLE_GRANT_TYPES = [
+  'authorization_code',
+  'refresh_token',
+  'client_credentials'
 ]
 
 export default function ClientForm({ client, onSubmit, onCancel }: ClientFormProps) {
   const [formData, setFormData] = useState({
     name: client?.name || '',
     description: client?.description || '',
-    type: client?.type || 'confidential' as const,
-    status: client?.status || 'active' as const,
-    redirectUris: client?.redirectUris || [''],
-    scopes: client?.scopes || []
+    redirect_uris: client?.redirect_uris || [''],
+    scopes: client?.scopes || ['read', 'openid'],
+    grant_types: client?.grant_types || ['authorization_code', 'refresh_token'],
+    active: client?.active ?? true
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -52,7 +66,7 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
     // Filter out empty redirect URIs
     const cleanedData = {
       ...formData,
-      redirectUris: formData.redirectUris.filter(uri => uri.trim() !== '')
+      redirect_uris: formData.redirect_uris.filter(uri => uri.trim() !== '')
     }
     
     onSubmit(cleanedData)
@@ -75,22 +89,36 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
   const addRedirectUri = () => {
     setFormData(prev => ({
       ...prev,
-      redirectUris: [...prev.redirectUris, '']
+      redirect_uris: [...prev.redirect_uris, '']
     }))
   }
 
   const removeRedirectUri = (index: number) => {
     setFormData(prev => ({
       ...prev,
-      redirectUris: prev.redirectUris.filter((_, i) => i !== index)
+      redirect_uris: prev.redirect_uris.filter((_, i) => i !== index)
     }))
   }
 
   const updateRedirectUri = (index: number, value: string) => {
     setFormData(prev => ({
       ...prev,
-      redirectUris: prev.redirectUris.map((uri, i) => i === index ? value : uri)
+      redirect_uris: prev.redirect_uris.map((uri, i) => i === index ? value : uri)
     }))
+  }
+
+  const handleGrantTypeChange = (grantType: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        grant_types: [...prev.grant_types, grantType]
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        grant_types: prev.grant_types.filter(gt => gt !== grantType)
+      }))
+    }
   }
 
   return (
@@ -107,14 +135,14 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="type">Client Type</Label>
-          <Select value={formData.type} onValueChange={(value: any) => setFormData(prev => ({ ...prev, type: value }))}>
+          <Label htmlFor="active">Status</Label>
+          <Select value={formData.active ? "active" : "inactive"} onValueChange={(value) => setFormData(prev => ({ ...prev, active: value === "active" }))}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="confidential">Confidential (Server-side app)</SelectItem>
-              <SelectItem value="public">Public (Mobile/SPA)</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -131,19 +159,6 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="status">Status</Label>
-        <Select value={formData.status} onValueChange={(value: any) => setFormData(prev => ({ ...prev, status: value }))}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label>Redirect URIs</Label>
@@ -153,14 +168,14 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
           </Button>
         </div>
         <div className="space-y-2">
-          {formData.redirectUris.map((uri, index) => (
+          {formData.redirect_uris.map((uri, index) => (
             <div key={index} className="flex items-center space-x-2">
               <Input
                 value={uri}
                 onChange={(e) => updateRedirectUri(index, e.target.value)}
                 placeholder="https://your-app.com/callback"
               />
-              {formData.redirectUris.length > 1 && (
+              {formData.redirect_uris.length > 1 && (
                 <Button
                   type="button"
                   size="sm"
@@ -196,6 +211,27 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
         </div>
         <p className="text-xs text-muted-foreground">
           Selected: {formData.scopes.length} scope{formData.scopes.length !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <Label>Grant Types</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {AVAILABLE_GRANT_TYPES.map((grantType) => (
+            <div key={grantType} className="flex items-center space-x-2">
+              <Checkbox
+                id={`grant-${grantType}`}
+                checked={formData.grant_types.includes(grantType)}
+                onCheckedChange={(checked) => handleGrantTypeChange(grantType, checked as boolean)}
+              />
+              <Label htmlFor={`grant-${grantType}`} className="text-sm">
+                {grantType}
+              </Label>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Selected: {formData.grant_types.length} grant type{formData.grant_types.length !== 1 ? 's' : ''}
         </p>
       </div>
 

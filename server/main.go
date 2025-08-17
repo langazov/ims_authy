@@ -84,6 +84,11 @@ func main() {
 
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetDashboardStats).Methods("GET")
 
+	// Social provider management endpoints
+	api.HandleFunc("/social/providers", socialAuthHandler.GetProviderConfigs).Methods("GET")
+	api.HandleFunc("/social/providers/{provider}", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
+	api.HandleFunc("/social/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
+
 	oauth := router.PathPrefix("/oauth").Subrouter()
 	oauth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
 	oauth.HandleFunc("/token", authHandler.Token).Methods("POST")

@@ -1,109 +1,215 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, Edit, Trash2, Copy, Eye, EyeOff } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Copy, Eye, EyeOff, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import ClientForm from './ClientForm'
+import AccessDenied from './AccessDenied'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface OAuthClient {
   id: string
+  client_id: string
   name: string
   description: string
-  clientId: string
-  clientSecret: string
-  redirectUris: string[]
+  redirect_uris: string[]
   scopes: string[]
-  type: 'confidential' | 'public'
-  status: 'active' | 'inactive'
-  createdAt: string
+  grant_types: string[]
+  active: boolean
+  created_at: string
+  updated_at: string
+  // Frontend-only fields for display
+  clientSecret?: string
+  type?: 'confidential' | 'public'
+}
+
+interface ClientFormData {
+  name: string
+  description: string
+  redirect_uris: string[]
+  scopes: string[]
+  grant_types: string[]
+  active: boolean
 }
 
 export default function ClientManagement() {
-  // Temporarily use local state to test if the component renders
+  const { canManageClients } = usePermissions()
   const [clients, setClients] = useState<OAuthClient[]>([])
-  const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedClient, setSelectedClient] = useState<OAuthClient | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [visibleSecrets, setVisibleSecrets] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [newlyCreatedClient, setNewlyCreatedClient] = useState<OAuthClient | null>(null)
+
+  // Check permissions
+  if (!canManageClients()) {
+    return (
+      <AccessDenied 
+        title="OAuth Client Management"
+        message="You don't have permission to manage OAuth clients."
+        requiredPermissions={['admin', 'client_management']}
+      />
+    )
+  }
 
   const safeClients = clients || []
+
+  // Fetch clients from backend
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/v1/clients')
+        if (response.ok) {
+          const fetchedClients = await response.json()
+          setClients(fetchedClients)
+        } else {
+          console.error('Failed to fetch clients:', response.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching clients:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchClients()
+  }, [])
   
   const filteredClients = safeClients.filter(client =>
     client?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client?.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client?.clientId?.toLowerCase().includes(searchTerm.toLowerCase())
+    client?.client_id?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const generateClientCredentials = () => {
-    const clientId = `client_${Date.now()}`
-    const clientSecret = `cs_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`
-    return { clientId, clientSecret }
-  }
 
-  const handleCreateClient = (clientData: Omit<OAuthClient, 'id' | 'clientId' | 'clientSecret' | 'createdAt'>) => {
-    const { clientId, clientSecret } = generateClientCredentials()
-    const newClient: OAuthClient = {
-      ...clientData,
-      id: `oauth_client_${Date.now()}`,
-      clientId,
-      clientSecret,
-      createdAt: new Date().toISOString()
+  const handleCreateClient = async (clientData: ClientFormData) => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/clients', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(clientData),
+      })
+      
+      if (response.ok) {
+        const newClient = await response.json()
+        // Add the client secret to the client object for display
+        const clientWithSecret = {
+          ...newClient,
+          clientSecret: newClient.client_secret
+        }
+        setClients(prev => [...prev, clientWithSecret])
+        setIsDialogOpen(false)
+        setSelectedClient(null)
+        
+        // Make the secret visible immediately and show important notice
+        setVisibleSecrets(prev => new Set([...prev, newClient.id]))
+        setNewlyCreatedClient(clientWithSecret)
+        toast.success('OAuth client created successfully - make sure to copy the client secret!')
+      } else {
+        const errorData = await response.text()
+        toast.error(`Failed to create client: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Error creating client:', error)
+      toast.error('Failed to create client')
     }
-    
-    setClients([...safeClients, newClient])
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'client' as const,
-      action: 'Created OAuth client',
-      target: clientData.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setIsDialogOpen(false)
-    toast.success(`OAuth client "${clientData.name}" created successfully`)
   }
 
-  const handleUpdateClient = (clientData: Omit<OAuthClient, 'id' | 'clientId' | 'clientSecret' | 'createdAt'>) => {
+  const handleUpdateClient = async (clientData: ClientFormData) => {
     if (!selectedClient) return
     
-    setClients(safeClients.map(client =>
-      client.id === selectedClient.id
-        ? { ...client, ...clientData }
-        : client
-    ))
-    
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'client' as const,
-      action: 'Updated OAuth client',
-      target: clientData.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setSelectedClient(null)
-    setIsDialogOpen(false)
-    toast.success(`OAuth client "${clientData.name}" updated successfully`)
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/clients/${selectedClient.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(clientData),
+      })
+      
+      if (response.ok) {
+        const updatedClient = await response.json()
+        setClients(prev => prev.map(client => 
+          client.id === selectedClient.id ? updatedClient : client
+        ))
+        setIsDialogOpen(false)
+        setSelectedClient(null)
+        toast.success('OAuth client updated successfully')
+      } else {
+        const errorData = await response.text()
+        toast.error(`Failed to update client: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Error updating client:', error)
+      toast.error('Failed to update client')
+    }
   }
 
-  const handleDeleteClient = (clientId: string) => {
-    const client = safeClients.find(c => c.id === clientId)
-    if (!client) return
+  const handleDeleteClient = async (clientId: string) => {
+    if (!confirm('Are you sure you want to delete this OAuth client? This action cannot be undone.')) {
+      return
+    }
     
-    setClients(safeClients.filter(c => c.id !== clientId))
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'client' as const,
-      action: 'Deleted OAuth client',
-      target: client.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/clients/${clientId}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        setClients(prev => prev.filter(client => client.id !== clientId))
+        toast.success('OAuth client deleted successfully')
+      } else {
+        const errorData = await response.text()
+        toast.error(`Failed to delete client: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Error deleting client:', error)
+      toast.error('Failed to delete client')
+    }
+  }
+
+  const handleRegenerateSecret = async (clientId: string, clientName: string) => {
+    if (!confirm(`Are you sure you want to regenerate the client secret for "${clientName}"? The current secret will be invalidated and cannot be recovered.`)) {
+      return
+    }
     
-    toast.success(`OAuth client "${client.name}" deleted`)
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/clients/${clientId}/regenerate-secret`, {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        // Update the client with new secret in state
+        setClients(prev => prev.map(client => 
+          client.id === clientId 
+            ? { ...client, clientSecret: result.client_secret }
+            : client
+        ))
+        // Show the secret and make it visible
+        setVisibleSecrets(prev => new Set([...prev, clientId]))
+        toast.success('Client secret regenerated successfully')
+        
+        // Show warning about copying the secret
+        setTimeout(() => {
+          toast.warning('Make sure to copy the new client secret - it won\'t be shown again!')
+        }, 1000)
+      } else {
+        const errorData = await response.text()
+        toast.error(`Failed to regenerate secret: ${errorData}`)
+      }
+    } catch (error) {
+      console.error('Error regenerating secret:', error)
+      toast.error('Failed to regenerate client secret')
+    }
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -123,16 +229,68 @@ export default function ClientManagement() {
     })
   }
 
-  const getStatusBadgeColor = (status: OAuthClient['status']) => {
+  const getStatusBadgeColor = (status: string) => {
     return status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
   }
 
-  const getTypeBadgeColor = (type: OAuthClient['type']) => {
+  const getTypeBadgeColor = (type: string) => {
     return type === 'confidential' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">OAuth Client Management</h2>
+            <p className="text-muted-foreground">Loading clients...</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground mt-4">Loading OAuth clients...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
+      {newlyCreatedClient && (
+        <Alert className="border-green-200 bg-green-50">
+          <AlertDescription className="space-y-3">
+            <div className="font-medium text-green-800">
+              🎉 OAuth Client "{newlyCreatedClient.name}" created successfully!
+            </div>
+            <div className="text-sm text-green-700">
+              <strong>⚠️ IMPORTANT:</strong> Copy your client secret now - it won't be displayed again after you refresh the page.
+            </div>
+            <div className="flex items-center space-x-2 p-3 bg-white rounded border">
+              <div className="flex-1">
+                <div className="text-xs text-muted-foreground mb-1">Client Secret:</div>
+                <code className="text-sm font-mono bg-muted px-2 py-1 rounded">
+                  {newlyCreatedClient.clientSecret}
+                </code>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => {
+                  copyToClipboard(newlyCreatedClient.clientSecret || '', 'Client Secret')
+                  setNewlyCreatedClient(null)
+                }}
+              >
+                <Copy size={12} className="mr-1" />
+                Copy & Dismiss
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">OAuth Client Management</h2>
@@ -145,14 +303,19 @@ export default function ClientManagement() {
               Register Client
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{selectedClient ? 'Edit OAuth Client' : 'Register New OAuth Client'}</DialogTitle>
+              <DialogTitle>
+                {selectedClient ? 'Edit OAuth Client' : 'Register New OAuth Client'}
+              </DialogTitle>
             </DialogHeader>
             <ClientForm
               client={selectedClient}
               onSubmit={selectedClient ? handleUpdateClient : handleCreateClient}
-              onCancel={() => setIsDialogOpen(false)}
+              onCancel={() => {
+                setIsDialogOpen(false)
+                setSelectedClient(null)
+              }}
             />
           </DialogContent>
         </Dialog>
@@ -184,7 +347,10 @@ export default function ClientManagement() {
                 {safeClients.length === 0 ? 'Get started by registering your first OAuth client' : 'Try adjusting your search terms'}
               </p>
               {safeClients.length === 0 && (
-                <Button onClick={() => setIsDialogOpen(true)}>
+                <Button onClick={() => {
+                  setSelectedClient(null)
+                  setIsDialogOpen(true)
+                }}>
                   <Plus size={16} className="mr-2" />
                   Register First Client
                 </Button>
@@ -214,11 +380,11 @@ export default function ClientManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <code className="text-sm bg-muted px-2 py-1 rounded">{client.clientId}</code>
+                        <code className="text-sm bg-muted px-2 py-1 rounded">{client.client_id}</code>
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => copyToClipboard(client.clientId, 'Client ID')}
+                          onClick={() => copyToClipboard(client.client_id, 'Client ID')}
                         >
                           <Copy size={12} />
                         </Button>
@@ -227,7 +393,7 @@ export default function ClientManagement() {
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <code className="text-sm bg-muted px-2 py-1 rounded">
-                          {visibleSecrets.has(client.id) ? client.clientSecret : '••••••••••••••••'}
+                          {visibleSecrets.has(client.id) ? (client.clientSecret || 'Not available') : '••••••••••••••••'}
                         </code>
                         <Button
                           size="sm"
@@ -239,20 +405,28 @@ export default function ClientManagement() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => copyToClipboard(client.clientSecret, 'Client Secret')}
+                          onClick={() => copyToClipboard(client.clientSecret || 'Not available', 'Client Secret')}
                         >
                           <Copy size={12} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRegenerateSecret(client.id, client.name)}
+                          title="Regenerate Client Secret"
+                        >
+                          <RefreshCw size={12} />
                         </Button>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getTypeBadgeColor(client.type)}>
-                        {client.type}
+                      <Badge className={getTypeBadgeColor(client.type || 'public')}>
+                        {client.type || 'public'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusBadgeColor(client.status)}>
-                        {client.status}
+                      <Badge className={getStatusBadgeColor(client.active ? 'active' : 'inactive')}>
+                        {client.active ? 'active' : 'inactive'}
                       </Badge>
                     </TableCell>
                     <TableCell>

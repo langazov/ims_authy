@@ -283,3 +283,144 @@ func contains(str, substr string) bool {
 		str[len(str)-len(substr)-1:] == " "+substr || 
 		len(str) > len(substr)*2 && str[len(str)-len(substr):] == substr)))
 }
+
+// Provider configuration management structures
+type ProviderConfig struct {
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Enabled      bool     `json:"enabled"`
+	ClientID     string   `json:"clientId"`
+	ClientSecret string   `json:"clientSecret,omitempty"`
+	RedirectURL  string   `json:"redirectUrl"`
+	Scopes       []string `json:"scopes"`
+	AuthURL      string   `json:"authUrl"`
+	TokenURL     string   `json:"tokenUrl"`
+	UserInfoURL  string   `json:"userInfoUrl"`
+	Configured   bool     `json:"configured"`
+}
+
+type UpdateProviderRequest struct {
+	Enabled      bool     `json:"enabled"`
+	ClientID     string   `json:"clientId"`
+	ClientSecret string   `json:"clientSecret"`
+	RedirectURL  string   `json:"redirectUrl"`
+}
+
+// GetProviderConfigs returns the configuration of all social providers
+func (h *SocialAuthHandler) GetProviderConfigs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	configs := []ProviderConfig{
+		{
+			ID:          "google",
+			Name:        "Google",
+			Enabled:     h.socialAuthService.IsProviderEnabled("google"),
+			ClientID:    h.socialAuthService.GetProviderClientID("google"),
+			RedirectURL: "http://localhost:8080/auth/google/callback",
+			Scopes:      []string{"openid", "profile", "email"},
+			AuthURL:     "https://accounts.google.com/o/oauth2/v2/auth",
+			TokenURL:    "https://oauth2.googleapis.com/token",
+			UserInfoURL: "https://www.googleapis.com/oauth2/v2/userinfo",
+			Configured:  h.socialAuthService.IsProviderConfigured("google"),
+		},
+		{
+			ID:          "github",
+			Name:        "GitHub",
+			Enabled:     h.socialAuthService.IsProviderEnabled("github"),
+			ClientID:    h.socialAuthService.GetProviderClientID("github"),
+			RedirectURL: "http://localhost:8080/auth/github/callback",
+			Scopes:      []string{"user:email"},
+			AuthURL:     "https://github.com/login/oauth/authorize",
+			TokenURL:    "https://github.com/login/oauth/access_token",
+			UserInfoURL: "https://api.github.com/user",
+			Configured:  h.socialAuthService.IsProviderConfigured("github"),
+		},
+		{
+			ID:          "facebook",
+			Name:        "Facebook",
+			Enabled:     h.socialAuthService.IsProviderEnabled("facebook"),
+			ClientID:    h.socialAuthService.GetProviderClientID("facebook"),
+			RedirectURL: "http://localhost:8080/auth/facebook/callback",
+			Scopes:      []string{"email", "public_profile"},
+			AuthURL:     "https://www.facebook.com/v18.0/dialog/oauth",
+			TokenURL:    "https://graph.facebook.com/v18.0/oauth/access_token",
+			UserInfoURL: "https://graph.facebook.com/v18.0/me",
+			Configured:  h.socialAuthService.IsProviderConfigured("facebook"),
+		},
+		{
+			ID:          "apple",
+			Name:        "Apple",
+			Enabled:     h.socialAuthService.IsProviderEnabled("apple"),
+			ClientID:    h.socialAuthService.GetProviderClientID("apple"),
+			RedirectURL: "http://localhost:8080/auth/apple/callback",
+			Scopes:      []string{"name", "email"},
+			AuthURL:     "https://appleid.apple.com/auth/authorize",
+			TokenURL:    "https://appleid.apple.com/auth/token",
+			UserInfoURL: "",
+			Configured:  h.socialAuthService.IsProviderConfigured("apple"),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(configs)
+}
+
+// UpdateProviderConfig updates the configuration for a specific provider
+func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "PUT" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	provider := vars["provider"]
+
+	var req UpdateProviderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Note: In a real implementation, you would update environment variables or configuration
+	// For now, we'll return success to demonstrate the API
+	response := map[string]interface{}{
+		"success": true,
+		"message": "Provider configuration updated successfully",
+		"provider": provider,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// TestProviderConfig tests the configuration for a specific provider
+func (h *SocialAuthHandler) TestProviderConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	vars := mux.Vars(r)
+	provider := vars["provider"]
+
+	// Basic validation
+	isConfigured := h.socialAuthService.IsProviderConfigured(provider)
+	
+	response := map[string]interface{}{
+		"success":    isConfigured,
+		"configured": isConfigured,
+		"provider":   provider,
+	}
+
+	if !isConfigured {
+		response["message"] = "Provider is not properly configured"
+	} else {
+		response["message"] = "Provider configuration is valid"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}

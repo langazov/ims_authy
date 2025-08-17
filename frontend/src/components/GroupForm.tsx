@@ -10,12 +10,14 @@ interface Group {
   name: string
   description: string
   scopes: string[]
-  createdAt: string
+  members: string[]
+  created_at: string
+  updated_at: string
 }
 
 interface GroupFormProps {
   group?: Group | null
-  onSubmit: (groupData: Omit<Group, 'id' | 'createdAt'>) => void
+  onSubmit: (groupData: Omit<Group, 'id' | 'members' | 'created_at' | 'updated_at'>) => void
   onCancel: () => void
 }
 

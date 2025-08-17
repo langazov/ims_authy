@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
-import { ShieldClose, Group, Cog, ChartColumn, LogOut } from 'lucide-react'
+import { ShieldClose, Group, Cog, ChartColumn, LogOut, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
 import Dashboard from '@/components/Dashboard'
 import UserManagement from '@/components/UserManagement'
 import GroupManagement from '@/components/GroupManagement'
 import ClientManagement from '@/components/ClientManagement'
+import SocialLoginSetup from '@/components/SocialLoginSetup'
 
 export default function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -43,13 +44,13 @@ export default function AuthenticatedApp() {
 
       <main className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-5 mb-8">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2">
               <ChartColumn size={16} />
               <span>Dashboard</span>
             </TabsTrigger>
             <TabsTrigger value="users" className="flex items-center space-x-2">
-              <Group size={16} />
+              <Users size={16} />
               <span>Users</span>
             </TabsTrigger>
             <TabsTrigger value="groups" className="flex items-center space-x-2">
@@ -59,6 +60,10 @@ export default function AuthenticatedApp() {
             <TabsTrigger value="clients" className="flex items-center space-x-2">
               <Cog size={16} />
               <span>OAuth Clients</span>
+            </TabsTrigger>
+            <TabsTrigger value="social" className="flex items-center space-x-2">
+              <ShieldClose size={16} />
+              <span>Social Login</span>
             </TabsTrigger>
           </TabsList>
 
@@ -76,6 +81,10 @@ export default function AuthenticatedApp() {
           
           <TabsContent value="clients">
             <ClientManagement />
+          </TabsContent>
+          
+          <TabsContent value="social">
+            <SocialLoginSetup />
           </TabsContent>
         </Tabs>
       </main>

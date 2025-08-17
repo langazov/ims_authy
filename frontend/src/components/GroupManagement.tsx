@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,89 +6,181 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Search, Edit, Trash2, Users } from 'lucide-react'
 import GroupForm from './GroupForm'
+import AccessDenied from './AccessDenied'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface Group {
   id: string
   name: string
   description: string
   scopes: string[]
-  memberCount?: number
-  createdAt: string
+  members: string[]
+  created_at: string
+  updated_at: string
 }
 
 export default function GroupManagement() {
-  // Temporarily use local state to test if the component renders
+  const { canManageGroups } = usePermissions()
   const [groups, setGroups] = useState<Group[]>([])
-  const [users] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  // Check permissions
+  if (!canManageGroups()) {
+    return (
+      <AccessDenied 
+        title="Group Management"
+        message="You don't have permission to manage groups and permissions."
+        requiredPermissions={['admin', 'user_management']}
+      />
+    )
+  }
 
   const safeGroups = groups || []
-  const safeUsers = users || []
+
+  // Fetch groups from backend
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/v1/groups')
+        if (response.ok) {
+          const fetchedGroups = await response.json()
+          setGroups(fetchedGroups)
+        } else {
+          console.error('Failed to fetch groups:', response.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching groups:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchGroups()
+  }, [])
   
   const filteredGroups = safeGroups.filter(group =>
     group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     group?.description?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const getGroupMemberCount = (groupId: string) => {
-    return safeUsers.filter((user: any) => user?.groups?.includes(groupId)).length
+  const getGroupMemberCount = (group: Group) => {
+    return group.members ? group.members.length : 0
   }
 
-  const handleCreateGroup = (groupData: Omit<Group, 'id' | 'createdAt'>) => {
-    const newGroup: Group = {
-      ...groupData,
-      id: `group_${Date.now()}`,
-      createdAt: new Date().toISOString()
+  const handleCreateGroup = async (groupData: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/groups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(groupData),
+      })
+
+      if (response.ok) {
+        const newGroup = await response.json()
+        setGroups([...safeGroups, newGroup])
+        setActivity([{
+          id: `activity_${Date.now()}`,
+          type: 'group' as const,
+          action: 'Created group',
+          target: groupData.name,
+          timestamp: new Date().toLocaleString()
+        }, ...activity])
+        setIsDialogOpen(false)
+      } else {
+        console.error('Failed to create group:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error creating group:', error)
     }
-    
-    setGroups([...safeGroups, newGroup])
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'group' as const,
-      action: 'Created group',
-      target: groupData.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setIsDialogOpen(false)
   }
 
-  const handleUpdateGroup = (groupData: Omit<Group, 'id' | 'createdAt'>) => {
+  const handleUpdateGroup = async (groupData: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
     if (!selectedGroup) return
     
-    setGroups(safeGroups.map(group =>
-      group.id === selectedGroup.id
-        ? { ...group, ...groupData }
-        : group
-    ))
-    
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'group' as const,
-      action: 'Updated group',
-      target: groupData.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
-    
-    setSelectedGroup(null)
-    setIsDialogOpen(false)
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/groups/${selectedGroup.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(groupData),
+      })
+
+      if (response.ok) {
+        const updatedGroup = await response.json()
+        setGroups(safeGroups.map(group =>
+          group.id === selectedGroup.id ? updatedGroup : group
+        ))
+        
+        setActivity([{
+          id: `activity_${Date.now()}`,
+          type: 'group' as const,
+          action: 'Updated group',
+          target: groupData.name,
+          timestamp: new Date().toLocaleString()
+        }, ...activity])
+        
+        setSelectedGroup(null)
+        setIsDialogOpen(false)
+      } else {
+        console.error('Failed to update group:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error updating group:', error)
+    }
   }
 
-  const handleDeleteGroup = (groupId: string) => {
+  const handleDeleteGroup = async (groupId: string) => {
     const group = safeGroups.find(g => g.id === groupId)
     if (!group) return
     
-    setGroups(safeGroups.filter(g => g.id !== groupId))
-    setActivity([{
-      id: `activity_${Date.now()}`,
-      type: 'group' as const,
-      action: 'Deleted group',
-      target: group.name,
-      timestamp: new Date().toLocaleString()
-    }, ...activity])
+    try {
+      const response = await fetch(`http://localhost:8080/api/v1/groups/${groupId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setGroups(safeGroups.filter(g => g.id !== groupId))
+        setActivity([{
+          id: `activity_${Date.now()}`,
+          type: 'group' as const,
+          action: 'Deleted group',
+          target: group.name,
+          timestamp: new Date().toLocaleString()
+        }, ...activity])
+      } else {
+        console.error('Failed to delete group:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight">Group Management</h2>
+            <p className="text-muted-foreground">Loading groups...</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-muted-foreground mt-4">Loading groups...</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -184,7 +276,7 @@ export default function GroupManagement() {
                   <CardContent className="space-y-3">
                     <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                       <Users size={14} />
-                      <span>{getGroupMemberCount(group.id)} members</span>
+                      <span>{getGroupMemberCount(group)} members</span>
                     </div>
                     
                     <div className="space-y-2">
@@ -203,7 +295,7 @@ export default function GroupManagement() {
                     </div>
 
                     <div className="pt-2 border-t text-xs text-muted-foreground">
-                      Created {new Date(group.createdAt).toLocaleDateString()}
+                      Created {new Date(group.created_at).toLocaleDateString()}
                     </div>
                   </CardContent>
                 </Card>

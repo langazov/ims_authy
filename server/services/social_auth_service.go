@@ -445,3 +445,51 @@ func (s *SocialAuthService) GetEnabledProviders() []string {
 
 	return providers
 }
+
+// IsProviderEnabled checks if a specific provider is enabled
+func (s *SocialAuthService) IsProviderEnabled(provider string) bool {
+	switch provider {
+	case "google":
+		return s.config.Google.Enabled
+	case "github":
+		return s.config.GitHub.Enabled
+	case "facebook":
+		return s.config.Facebook.Enabled
+	case "apple":
+		return s.config.Apple.Enabled
+	default:
+		return false
+	}
+}
+
+// GetProviderClientID returns the client ID for a specific provider
+func (s *SocialAuthService) GetProviderClientID(provider string) string {
+	switch provider {
+	case "google":
+		return s.config.Google.ClientID
+	case "github":
+		return s.config.GitHub.ClientID
+	case "facebook":
+		return s.config.Facebook.ClientID
+	case "apple":
+		return s.config.Apple.ClientID
+	default:
+		return ""
+	}
+}
+
+// IsProviderConfigured checks if a provider has all required configuration
+func (s *SocialAuthService) IsProviderConfigured(provider string) bool {
+	switch provider {
+	case "google":
+		return s.config.Google.ClientID != "" && s.config.Google.ClientSecret != ""
+	case "github":
+		return s.config.GitHub.ClientID != "" && s.config.GitHub.ClientSecret != ""
+	case "facebook":
+		return s.config.Facebook.ClientID != "" && s.config.Facebook.ClientSecret != ""
+	case "apple":
+		return s.config.Apple.ClientID != "" && s.config.Apple.ClientSecret != ""
+	default:
+		return false
+	}
+}

@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Plus, Search, Edit, Trash2 } from 'lucide-react'
 import UserForm from './UserForm'
 import { apiClient } from '@/lib/api'
+import AccessDenied from './AccessDenied'
+import { usePermissions } from '@/hooks/usePermissions'
 
 interface User {
   id: string
@@ -23,6 +25,7 @@ interface User {
 }
 
 export default function UserManagement() {
+  const { canManageUsers } = usePermissions()
   const [users, setUsers] = useState<User[]>([])
   const [groups, setGroups] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
@@ -30,6 +33,17 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Check permissions
+  if (!canManageUsers()) {
+    return (
+      <AccessDenied 
+        title="User Management"
+        message="You don't have permission to manage user accounts."
+        requiredPermissions={['admin', 'user_management']}
+      />
+    )
+  }
 
   useEffect(() => {
     const fetchData = async () => {
