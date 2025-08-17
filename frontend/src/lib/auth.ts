@@ -164,6 +164,30 @@ class AuthService {
     throw new Error('No authentication data available')
   }
 
+  async refreshCurrentUser(): Promise<User> {
+    try {
+      const response = await this.makeAuthenticatedRequest(`${config.apiBaseUrl}/api/v1/users/me`)
+      if (!response.ok) {
+        throw new Error('Failed to refresh user data')
+      }
+      const userData = await response.json()
+      
+      // Update cached user data with fresh data from database
+      const refreshedUser: User = {
+        id: userData.id,
+        email: userData.email,
+        scopes: userData.scopes || [],
+        groups: userData.groups || []
+      }
+      
+      return refreshedUser
+    } catch (error) {
+      console.error('[auth] refreshCurrentUser failed:', error)
+      // Fallback to cached user data
+      return this.getCurrentUser()
+    }
+  }
+
   private parseJwtPayload(token: string): any {
     const parts = token.split('.')
     if (parts.length !== 3) {

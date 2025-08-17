@@ -10,6 +10,7 @@ interface AuthContextType {
   loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple') => void
   logout: () => void
   handleCallback: (code: string, state: string) => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -83,6 +84,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
+  const refreshUser = async () => {
+    try {
+      console.info('[AuthContext] refreshing user data from database')
+      const freshUser = await authService.refreshCurrentUser()
+      setUser(freshUser)
+      console.info('[AuthContext] user data refreshed', { 
+        id: freshUser.id, 
+        email: freshUser.email, 
+        scopes: freshUser.scopes.length,
+        groups: freshUser.groups.length 
+      })
+    } catch (error) {
+      console.error('[AuthContext] Failed to refresh user data:', error)
+    }
+  }
+
   const value: AuthContextType = {
     user,
     isLoading,
@@ -91,7 +108,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     directLogin,
     loginWithSocial,
     logout,
-    handleCallback
+    handleCallback,
+    refreshUser
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

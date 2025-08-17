@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 
 export function usePermissions() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
 
   const hasScope = (scope: string): boolean => {
     if (!user) return false
@@ -41,6 +41,7 @@ export function usePermissions() {
 
   return {
     user,
+    refreshUser,
     hasScope,
     hasAnyScope,
     hasAllScopes,

@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
@@ -192,4 +195,88 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetCurrentUser returns the current user's fresh information from the database
+func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract user ID from JWT token in Authorization header
+	userID, err := h.extractUserIDFromToken(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: "+err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get fresh user data from database
+	user, err := h.userService.GetUserByID(userID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	// Return fresh user data
+	response := map[string]interface{}{
+		"id":         user.ID.Hex(),
+		"email":      user.Email,
+		"username":   user.Username,
+		"first_name": user.FirstName,
+		"last_name":  user.LastName,
+		"groups":     user.Groups,
+		"scopes":     user.Scopes,
+		"active":     user.Active,
+		"two_factor_enabled": user.TwoFactorEnabled,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// Helper function to extract user ID from JWT token
+func (h *UserHandler) extractUserIDFromToken(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", fmt.Errorf("authorization header missing")
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return "", fmt.Errorf("invalid authorization header format")
+	}
+
+	token := parts[1]
+	
+	// Parse JWT token (simplified - just decode the payload)
+	parts = strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part)
+	payload := parts[1]
+	// Add padding if needed
+	for len(payload)%4 != 0 {
+		payload += "="
+	}
+	
+	decoded, err := base64.URLEncoding.DecodeString(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode JWT payload")
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return "", fmt.Errorf("failed to parse JWT claims")
+	}
+
+	// Extract user ID from claims
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return "", fmt.Errorf("user_id not found in token")
+	}
+
+	return userID, nil
 }

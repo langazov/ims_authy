@@ -334,7 +334,7 @@ func (s *OAuthService) generateIDToken(userID, clientID string, scopes []string)
 		UserID: userID,
 		Email:  user.Email,
 		Groups: user.Groups,
-		Scopes: scopes,
+		Scopes: user.Scopes, // Use user's actual database scopes instead of OAuth request scopes
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
