@@ -1,0 +1,265 @@
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Image configuration
+image:
+  registry: docker.io
+  repository: oauth2-server
+  tag: "latest"
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Replica configuration
+replicaCount: 1
+frontendReplicaCount: 1
+
+# Frontend image configuration
+frontend:
+  image:
+    registry: docker.io
+    repository: oauth2-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+    annotations: {}
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: auth.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
+# Service account
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 2000
+
+# Security context
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+    annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: oauth2.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: oauth2-tls
+    #   hosts:
+    #     - oauth2.example.com
+
+
+# Resource limits
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Application configuration
+config:
+  # Server configuration
+  port: 8080
+  jwtSecret: "your-super-secret-jwt-key-change-this-in-production"
+  
+  # Database configuration
+  database:
+    name: oauth2_server
+    
+  # OAuth2 client configuration
+  oauth2:
+    clientId: "frontend-client"
+    clientSecret: "oauth2-secret"
+    redirectUrl: "http://localhost:80/callback"
+    authServerUrl: "http://localhost:8080/oauth/authorize"
+    tokenServerUrl: "http://localhost:8080/oauth/token"
+
+  # Social login providers (optional)
+  socialLogin:
+    google:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "http://localhost:8080/auth/google/callback"
+    
+    github:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "http://localhost:8080/auth/github/callback"
+      
+    facebook:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "http://localhost:8080/auth/facebook/callback"
+      
+    apple:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "http://localhost:8080/auth/apple/callback"
+
+# Secrets configuration
+secrets:
+  # Existing secret name for JWT and OAuth secrets
+  existingSecret: ""
+  # Keys in the existing secret
+  jwtSecretKey: "jwt-secret"
+  clientSecretKey: "client-secret"
+  
+  # Social login secrets
+  socialSecrets:
+    existingSecret: ""
+    googleClientSecretKey: "google-client-secret"
+    githubClientSecretKey: "github-client-secret"
+    facebookClientSecretKey: "facebook-client-secret"
+    appleClientSecretKey: "apple-client-secret"
+
+# MongoDB configuration
+mongodb:
+  enabled: true
+  auth:
+    enabled: true
+    rootUsername: admin
+    rootPassword: password123
+    usernames:
+      - oauth2user
+    passwords:
+      - oauth2pass
+    databases:
+      - oauth2_server
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# External MongoDB configuration (if mongodb.enabled = false)
+externalMongodb:
+  host: localhost
+  port: 27017
+  database: oauth2_server
+  auth:
+    enabled: true
+    username: admin
+    password: password123
+    authSource: admin
+  # Existing secret for MongoDB credentials
+  existingSecret: ""
+  usernameKey: "username"
+  passwordKey: "password"
+
+# Persistent Volume configuration
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""
+  
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+# Service monitor for Prometheus
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics

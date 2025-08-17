@@ -1,0 +1,26 @@
+apiVersion: v2
+name: oauth2-server
+description: A complete OAuth2 + OpenID Connect server with PKCE support and social login
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+home: https://github.com/your-org/oauth2-server
+sources:
+  - https://github.com/your-org/oauth2-server
+keywords:
+  - oauth2
+  - openid-connect
+  - authentication
+  - authorization
+  - pkce
+  - social-login
+maintainers:
+  - name: OAuth2 Server Team
+    email: support@oauth2server.local
+dependencies:
+  - name: mongodb
+    version: "^13.0.0"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: mongodb.enabled
+annotations:
+  category: Authentication

@@ -1,0 +1,174 @@
+# Production values for oauth2-server
+# This file contains production-ready configurations
+
+replicaCount: 3
+frontendReplicaCount: 2
+
+# Production images (update with your registry)
+image:
+  registry: your-registry.com
+  repository: oauth2-server
+  tag: "v1.0.0"
+  pullPolicy: IfNotPresent
+
+frontend:
+  image:
+    registry: your-registry.com
+    repository: oauth2-frontend
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+
+# Ingress configuration with TLS
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+  hosts:
+    - host: oauth2.company.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: oauth2-server-tls
+      hosts:
+        - oauth2.company.com
+
+frontend:
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: auth.company.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: oauth2-frontend-tls
+        hosts:
+          - auth.company.com
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# Production resource configuration
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+
+# Enable autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production application configuration
+config:
+  jwtSecret: "production-jwt-secret-change-this-to-a-secure-value"
+  oauth2:
+    clientId: "production-frontend-client"
+    clientSecret: "production-oauth2-secret-change-this"
+    redirectUrl: "https://auth.company.com/callback"
+    authServerUrl: "https://oauth2.company.com/oauth/authorize"
+    tokenServerUrl: "https://oauth2.company.com/oauth/token"
+  
+  # Configure social login providers (replace with your credentials)
+  socialLogin:
+    google:
+      clientId: "your-google-client-id.apps.googleusercontent.com"
+      clientSecret: "your-google-client-secret"
+      redirectUrl: "https://oauth2.company.com/auth/google/callback"
+    
+    github:
+      clientId: "your-github-client-id"
+      clientSecret: "your-github-client-secret"
+      redirectUrl: "https://oauth2.company.com/auth/github/callback"
+
+# MongoDB production configuration
+mongodb:
+  enabled: true
+  auth:
+    rootPassword: "secure-mongodb-password-change-this"
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: "fast-ssd"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 200m
+      memory: 512Mi
+
+# Enable pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Enable monitoring
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+
+# Security configurations
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node affinity for production workloads
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - oauth2-server
+        topologyKey: kubernetes.io/hostname
+
+# Use production storage class
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClass: "fast-ssd"
+
+# Production tolerations (if needed)
+tolerations:
+  - key: "production"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+
+# Node selector for production nodes
+nodeSelector:
+  environment: production

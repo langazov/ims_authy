@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oauth2-server.fullname" . }}
+  labels:
+    {{- include "oauth2-server.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.config.port | quote }}
+  DATABASE_NAME: {{ .Values.config.database.name | quote }}
+  CLIENT_ID: {{ .Values.config.oauth2.clientId | quote }}
+  REDIRECT_URL: {{ .Values.config.oauth2.redirectUrl | quote }}
+  AUTH_SERVER_URL: {{ .Values.config.oauth2.authServerUrl | quote }}
+  TOKEN_SERVER_URL: {{ .Values.config.oauth2.tokenServerUrl | quote }}
+  {{- if .Values.config.socialLogin.google.clientId }}
+  GOOGLE_CLIENT_ID: {{ .Values.config.socialLogin.google.clientId | quote }}
+  GOOGLE_REDIRECT_URL: {{ .Values.config.socialLogin.google.redirectUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.socialLogin.github.clientId }}
+  GITHUB_CLIENT_ID: {{ .Values.config.socialLogin.github.clientId | quote }}
+  GITHUB_REDIRECT_URL: {{ .Values.config.socialLogin.github.redirectUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.socialLogin.facebook.clientId }}
+  FACEBOOK_CLIENT_ID: {{ .Values.config.socialLogin.facebook.clientId | quote }}
+  FACEBOOK_REDIRECT_URL: {{ .Values.config.socialLogin.facebook.redirectUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.socialLogin.apple.clientId }}
+  APPLE_CLIENT_ID: {{ .Values.config.socialLogin.apple.clientId | quote }}
+  APPLE_REDIRECT_URL: {{ .Values.config.socialLogin.apple.redirectUrl | quote }}
+  {{- end }}

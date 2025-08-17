@@ -1,0 +1,109 @@
+# Development values for oauth2-server
+# This file contains development-friendly configurations
+
+replicaCount: 1
+frontendReplicaCount: 1
+
+# Use latest images for development
+image:
+  registry: docker.io
+  repository: oauth2-server
+  tag: "latest"
+  pullPolicy: Always
+
+frontend:
+  image:
+    registry: docker.io
+    repository: oauth2-frontend
+    tag: "latest"
+    pullPolicy: Always
+
+# Simple NodePort service for easy access
+service:
+  type: NodePort
+  port: 8080
+  nodePort: 30080
+
+frontend:
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30081
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  ingress:
+    enabled: false
+
+# Disable server ingress for development
+ingress:
+  enabled: false
+
+# Minimal resources for development (server)
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Disable autoscaling
+autoscaling:
+  enabled: false
+
+# Development application configuration
+config:
+  jwtSecret: "development-jwt-secret-not-secure"
+  oauth2:
+    clientId: "dev-frontend-client"
+    clientSecret: "dev-oauth2-secret"
+    redirectUrl: "http://localhost:30081/callback"
+    authServerUrl: "http://localhost:30080/oauth/authorize"
+    tokenServerUrl: "http://localhost:30080/oauth/token"
+
+# MongoDB development configuration
+mongodb:
+  enabled: true
+  auth:
+    rootPassword: "devpass123"
+  persistence:
+    enabled: false  # Use emptyDir for development
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# Disable production features
+podDisruptionBudget:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+
+networkPolicy:
+  enabled: false
+
+# Relaxed security for development
+securityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  readOnlyRootFilesystem: false
+
+podSecurityContext:
+  runAsNonRoot: false
+
+# Disable persistence for development
+persistence:
+  enabled: false
+
+# Development node selector (if applicable)
+nodeSelector:
+  environment: development

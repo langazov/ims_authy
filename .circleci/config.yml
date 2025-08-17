@@ -1,0 +1,160 @@
+version: 2.1
+
+jobs:
+  frontend-build:
+    docker:
+      - image: cimg/node:18.16
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-npm-deps-{{ checksum "frontend/package-lock.json" }}
+            - v1-npm-deps-
+      - run:
+          name: Install frontend dependencies
+          command: |
+            cd frontend
+            npm ci
+      - save_cache:
+          paths:
+            - frontend/node_modules
+          key: v1-npm-deps-{{ checksum "frontend/package-lock.json" }}
+      - run:
+          name: Build frontend
+          command: |
+            cd frontend
+            npm run build
+      - persist_to_workspace:
+          root: frontend
+          paths:
+            - dist
+
+  backend-build:
+    docker:
+      - image: cimg/go:1.24
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-go-mod-{{ checksum "server/go.sum" }}
+            - v1-go-mod-
+      - run:
+          name: Download Go modules
+          command: |
+            cd server
+            go mod download
+      - save_cache:
+          paths:
+            - /go/pkg/mod
+          key: v1-go-mod-{{ checksum "server/go.sum" }}
+      - run:
+          name: Run backend tests
+          command: |
+            cd server
+            go test ./...
+      - persist_to_workspace:
+          root: server
+          paths:
+            - .
+
+  docker-build-and-push:
+    docker:
+      - image: cimg/base:stable
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - attach_workspace:
+          at: ~/repo
+      - run:
+          name: Docker login
+          command: |
+            echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      - run:
+          name: Set image names and tags
+          command: |
+            export IMAGE_TAG=${CIRCLE_SHA1}
+            export FRONTEND_REPO=${DOCKERHUB_REPO_FRONTEND:-"ims_authy-frontend"}
+            export BACKEND_REPO=${DOCKERHUB_REPO_BACKEND:-"ims_authy-backend"}
+            echo "Frontend repo: $DOCKERHUB_USERNAME/$FRONTEND_REPO" > /tmp/image_info
+            echo "Backend repo: $DOCKERHUB_USERNAME/$BACKEND_REPO" >> /tmp/image_info
+            cat /tmp/image_info
+      - run:
+          name: Build frontend Docker image
+          command: |
+            # build using the frontend Dockerfile; frontend/dist was persisted from frontend-build
+            docker build -t $DOCKERHUB_USERNAME/$FRONTEND_REPO:${CIRCLE_SHA1} -t $DOCKERHUB_USERNAME/$FRONTEND_REPO:latest -f frontend/Dockerfile frontend
+      - run:
+          name: Build backend Docker image
+          command: |
+            docker build -t $DOCKERHUB_USERNAME/$BACKEND_REPO:${CIRCLE_SHA1} -t $DOCKERHUB_USERNAME/$BACKEND_REPO:latest -f server/Dockerfile server
+      - run:
+          name: Push frontend image
+          command: |
+            docker push $DOCKERHUB_USERNAME/$FRONTEND_REPO:${CIRCLE_SHA1}
+            docker push $DOCKERHUB_USERNAME/$FRONTEND_REPO:latest
+      - run:
+          name: Push backend image
+          command: |
+            docker push $DOCKERHUB_USERNAME/$BACKEND_REPO:${CIRCLE_SHA1}
+            docker push $DOCKERHUB_USERNAME/$BACKEND_REPO:latest
+  deploy-helm:
+    docker:
+      - image: cimg/base:stable
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - run:
+          name: Install kubectl and helm
+          command: |
+            set -e
+            # install kubectl
+            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+            rm kubectl
+            # install helm
+            curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - run:
+          name: Configure kubeconfig
+          command: |
+            set -e
+            if [ -z "$KUBE_CONFIG_DATA" ]; then echo "KUBE_CONFIG_DATA not set" && exit 1; fi
+            mkdir -p ~/.kube
+            echo "$KUBE_CONFIG_DATA" | base64 --decode > ~/.kube/config
+            chmod 600 ~/.kube/config
+            kubectl config current-context || true
+      - run:
+          name: Deploy Helm chart
+          command: |
+            set -e
+            IMAGE_TAG=${CIRCLE_SHA1}
+            FRONTEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_FRONTEND:-ims_authy-frontend}
+            BACKEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_BACKEND:-ims_authy-backend}
+            echo "Deploying with images: $FRONTEND_IMAGE:$IMAGE_TAG and $BACKEND_IMAGE:$IMAGE_TAG"
+            helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/ims_authy} \
+              --namespace ${KUBE_NAMESPACE:-default} --create-namespace \
+              --set frontend.image.repository=$FRONTEND_IMAGE --set frontend.image.tag=$IMAGE_TAG \
+              --set backend.image.repository=$BACKEND_IMAGE --set backend.image.tag=$IMAGE_TAG
+
+
+workflows:
+  version: 2
+  build_and_publish:
+    jobs:
+      - frontend-build
+      - backend-build:
+          requires:
+            - frontend-build
+      - docker-build-and-push:
+          requires:
+            - frontend-build
+            - backend-build
+      - hold:
+          type: approval
+      - deploy-helm:
+          requires:
+            - docker-build-and-push
+            - hold

@@ -1,0 +1,142 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oauth2-server.fullname" . }}
+  labels:
+    {{- include "oauth2-server.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "oauth2-server.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "oauth2-server.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "oauth2-server.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: oauth2-server
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.config.port | quote }}
+            - name: DATABASE_NAME
+              value: {{ .Values.config.database.name | quote }}
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.secretName" . }}
+                  key: mongo-uri
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.secretName" . }}
+                  key: {{ .Values.secrets.jwtSecretKey }}
+            - name: CLIENT_ID
+              value: {{ .Values.config.oauth2.clientId | quote }}
+            - name: CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.secretName" . }}
+                  key: {{ .Values.secrets.clientSecretKey }}
+            - name: REDIRECT_URL
+              value: {{ .Values.config.oauth2.redirectUrl | quote }}
+            - name: AUTH_SERVER_URL
+              value: {{ .Values.config.oauth2.authServerUrl | quote }}
+            - name: TOKEN_SERVER_URL
+              value: {{ .Values.config.oauth2.tokenServerUrl | quote }}
+            {{- if .Values.config.socialLogin.google.clientId }}
+            - name: GOOGLE_CLIENT_ID
+              value: {{ .Values.config.socialLogin.google.clientId | quote }}
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.socialSecretName" . }}
+                  key: {{ .Values.secrets.socialSecrets.googleClientSecretKey }}
+            - name: GOOGLE_REDIRECT_URL
+              value: {{ .Values.config.socialLogin.google.redirectUrl | quote }}
+            {{- end }}
+            {{- if .Values.config.socialLogin.github.clientId }}
+            - name: GITHUB_CLIENT_ID
+              value: {{ .Values.config.socialLogin.github.clientId | quote }}
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.socialSecretName" . }}
+                  key: {{ .Values.secrets.socialSecrets.githubClientSecretKey }}
+            - name: GITHUB_REDIRECT_URL
+              value: {{ .Values.config.socialLogin.github.redirectUrl | quote }}
+            {{- end }}
+            {{- if .Values.config.socialLogin.facebook.clientId }}
+            - name: FACEBOOK_CLIENT_ID
+              value: {{ .Values.config.socialLogin.facebook.clientId | quote }}
+            - name: FACEBOOK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.socialSecretName" . }}
+                  key: {{ .Values.secrets.socialSecrets.facebookClientSecretKey }}
+            - name: FACEBOOK_REDIRECT_URL
+              value: {{ .Values.config.socialLogin.facebook.redirectUrl | quote }}
+            {{- end }}
+            {{- if .Values.config.socialLogin.apple.clientId }}
+            - name: APPLE_CLIENT_ID
+              value: {{ .Values.config.socialLogin.apple.clientId | quote }}
+            - name: APPLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "oauth2-server.socialSecretName" . }}
+                  key: {{ .Values.secrets.socialSecrets.appleClientSecretKey }}
+            - name: APPLE_REDIRECT_URL
+              value: {{ .Values.config.socialLogin.apple.redirectUrl | quote }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if .Values.persistence.enabled }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "oauth2-server.fullname" . }}-data
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
