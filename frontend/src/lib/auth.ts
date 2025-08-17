@@ -303,7 +303,10 @@ class AuthService {
     }
 
     // Add tenant ID header if available
-    if (tokens.id_token) {
+    const activeTenantId = localStorage.getItem('activeTenantId')
+    if (activeTenantId) {
+      headers['X-Tenant-ID'] = activeTenantId
+    } else if (tokens.id_token) {
       try {
         const payload = this.parseJwtPayload(tokens.id_token)
         if (payload.tenant_id) {

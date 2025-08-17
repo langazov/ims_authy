@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tenant } from '@/types/tenant';
 import { tenantService } from '@/lib/tenantService';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface TenantListProps {
   onSelectTenant: (tenant: Tenant) => void;
@@ -16,6 +17,7 @@ export const TenantList: React.FC<TenantListProps> = ({
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { refreshTenants: refreshTenantContext } = useTenant();
 
   useEffect(() => {
     loadTenants();
@@ -45,6 +47,8 @@ export const TenantList: React.FC<TenantListProps> = ({
     try {
       await tenantService.deleteTenant(tenant.id!);
       await loadTenants();
+      // Also refresh the tenant context
+      await refreshTenantContext();
     } catch (err) {
       console.error('Failed to delete tenant:', err);
       alert('Failed to delete tenant: ' + (err instanceof Error ? err.message : 'Unknown error'));

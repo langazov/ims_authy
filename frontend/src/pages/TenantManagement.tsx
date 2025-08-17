@@ -3,6 +3,7 @@ import { TenantList } from '@/components/TenantList';
 import { TenantForm } from '@/components/TenantForm';
 import { Tenant, CreateTenantRequest, UpdateTenantRequest } from '@/types/tenant';
 import { tenantService } from '@/lib/tenantService';
+import { useTenant } from '@/contexts/TenantContext';
 
 export const TenantManagement: React.FC = () => {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | undefined>();
@@ -10,6 +11,7 @@ export const TenantManagement: React.FC = () => {
   const [editingTenant, setEditingTenant] = useState<Tenant | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { refreshTenants } = useTenant();
 
   const handleSelectTenant = (tenant: Tenant) => {
     setSelectedTenant(tenant);
@@ -44,6 +46,9 @@ export const TenantManagement: React.FC = () => {
 
       setShowForm(false);
       setEditingTenant(undefined);
+      
+      // Refresh the tenant context
+      await refreshTenants();
     } catch (err) {
       console.error('Failed to save tenant:', err);
       setError(err instanceof Error ? err.message : 'Failed to save tenant');
