@@ -104,3 +104,19 @@ type TwoFactorSession struct {
 	ExpiresAt time.Time          `bson:"expires_at" json:"expires_at"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }
+
+type SocialProvider struct {
+	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Name         string             `bson:"name" json:"name"`                 // google, github, facebook, apple
+	DisplayName  string             `bson:"display_name" json:"display_name"` // Google, GitHub, Facebook, Apple
+	ClientID     string             `bson:"client_id" json:"client_id"`
+	ClientSecret string             `bson:"client_secret" json:"-"` // Hidden in JSON responses
+	RedirectURL  string             `bson:"redirect_url" json:"redirect_url"`
+	Enabled      bool               `bson:"enabled" json:"enabled"`
+	Scopes       []string           `bson:"scopes" json:"scopes"`
+	AuthURL      string             `bson:"auth_url" json:"auth_url"`
+	TokenURL     string             `bson:"token_url" json:"token_url"`
+	UserInfoURL  string             `bson:"user_info_url" json:"user_info_url"`
+	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
+}

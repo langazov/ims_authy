@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base32"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"github.com/skip2/go-qrcode"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,8 +30,9 @@ type TwoFactorService struct {
 }
 
 type SetupTwoFactorResponse struct {
-	Secret     string `json:"secret"`
-	QRCodeURL  string `json:"qr_code_url"`
+	Secret      string   `json:"secret"`
+	QRCodeURL   string   `json:"qr_code_url"`
+	QRCodeImage string   `json:"qr_code_image"` // Base64 encoded PNG image
 	BackupCodes []string `json:"backup_codes"`
 }
 
@@ -70,11 +73,21 @@ func (s *TwoFactorService) SetupTwoFactor(userID, issuer string) (*SetupTwoFacto
 		return nil, err
 	}
 
+	// Generate QR code image
+	qrCode, err := qrcode.Encode(key.URL(), qrcode.Medium, 256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate QR code: %v", err)
+	}
+
+	// Encode to base64 for frontend
+	qrCodeBase64 := base64.StdEncoding.EncodeToString(qrCode)
+
 	backupCodes := s.generateBackupCodes()
 
 	return &SetupTwoFactorResponse{
 		Secret:      secret,
 		QRCodeURL:   key.URL(),
+		QRCodeImage: qrCodeBase64,
 		BackupCodes: backupCodes,
 	}, nil
 }

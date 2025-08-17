@@ -13,18 +13,20 @@ import (
 )
 
 type SocialAuthHandler struct {
-	socialAuthService *services.SocialAuthService
-	oauthService      *services.OAuthService
+	socialAuthService     *services.SocialAuthService
+	socialProviderService *services.SocialProviderService
+	oauthService          *services.OAuthService
 }
 
 type SocialProvidersResponse struct {
 	Providers []string `json:"providers"`
 }
 
-func NewSocialAuthHandler(socialAuthService *services.SocialAuthService, oauthService *services.OAuthService) *SocialAuthHandler {
+func NewSocialAuthHandler(socialAuthService *services.SocialAuthService, socialProviderService *services.SocialProviderService, oauthService *services.OAuthService) *SocialAuthHandler {
 	return &SocialAuthHandler{
-		socialAuthService: socialAuthService,
-		oauthService:      oauthService,
+		socialAuthService:     socialAuthService,
+		socialProviderService: socialProviderService,
+		oauthService:          oauthService,
 	}
 }
 
@@ -124,13 +126,32 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Check if we have OAuth parameters to continue the flow
-	originalState := r.URL.Query().Get("original_state")
-	clientID := r.URL.Query().Get("client_id")
-	redirectURI := r.URL.Query().Get("redirect_uri")
-	scope := r.URL.Query().Get("scope")
-	codeChallenge := r.URL.Query().Get("code_challenge")
-	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
+	// Get OAuth parameters from cookie (stored during OAuth initiation)
+	var originalState, clientID, redirectURI, scope, codeChallenge, codeChallengeMethod string
+	
+	if paramsCookie, err := r.Cookie("oauth_params_" + provider); err == nil {
+		// Decode the OAuth parameters from cookie
+		paramsJSON, err := base64.URLEncoding.DecodeString(paramsCookie.Value)
+		if err == nil {
+			var params map[string]string
+			if err := json.Unmarshal(paramsJSON, &params); err == nil {
+				originalState = params["original_state"]
+				clientID = params["client_id"]
+				redirectURI = params["redirect_uri"]
+				scope = params["scope"]
+				codeChallenge = params["code_challenge"]
+				codeChallengeMethod = params["code_challenge_method"]
+			}
+		}
+		
+		// Clear the OAuth params cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:   "oauth_params_" + provider,
+			Value:  "",
+			Path:   "/",
+			MaxAge: -1,
+		})
+	}
 
 	if clientID != "" && redirectURI != "" {
 		// Continue OAuth flow - create authorization code
@@ -384,8 +405,30 @@ func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Note: In a real implementation, you would update environment variables or configuration
-	// For now, we'll return success to demonstrate the API
+	// Get the existing provider from database
+	existingProvider, err := h.socialProviderService.GetProviderByName(provider)
+	if err != nil {
+		http.Error(w, "Provider not found", http.StatusNotFound)
+		return
+	}
+
+	// Update the provider with new values
+	existingProvider.Enabled = req.Enabled
+	existingProvider.ClientID = req.ClientID
+	if req.ClientSecret != "" {
+		existingProvider.ClientSecret = req.ClientSecret
+	}
+	if req.RedirectURL != "" {
+		existingProvider.RedirectURL = req.RedirectURL
+	}
+
+	// Save to database
+	err = h.socialProviderService.UpdateProvider(existingProvider.ID.Hex(), existingProvider)
+	if err != nil {
+		http.Error(w, "Failed to update provider configuration: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	response := map[string]interface{}{
 		"success": true,
 		"message": "Provider configuration updated successfully",

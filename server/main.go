@@ -46,12 +46,18 @@ func main() {
 	clientService := services.NewClientService(db)
 	scopeService := services.NewScopeService(db.Database)
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
-	socialAuthService := services.NewSocialAuthService(cfg, userService, db)
+	socialAuthService := services.NewSocialAuthService(userService, db)
 	twoFactorService := services.NewTwoFactorService(db)
 
 	// Initialize default scopes if none exist
 	if err := scopeService.InitializeDefaultScopes(); err != nil {
 		log.Printf("Warning: Failed to initialize default scopes: %v", err)
+	}
+
+	// Initialize default social providers if none exist
+	socialProviderService := services.NewSocialProviderService(db)
+	if err := socialProviderService.InitializeDefaultProviders(); err != nil {
+		log.Printf("Warning: Failed to initialize default social providers: %v", err)
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
@@ -60,7 +66,7 @@ func main() {
 	clientHandler := handlers.NewClientHandler(clientService)
 	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
-	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, oauthService)
+	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService)
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService)
 
 	router := mux.NewRouter()
@@ -119,6 +125,9 @@ func main() {
 	// Social authentication routes
 	auth := router.PathPrefix("/auth").Subrouter()
 	auth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
+	auth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
+	auth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
+	auth.HandleFunc("/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
 	auth.HandleFunc("/{provider}/login", socialAuthHandler.InitiateSocialLogin).Methods("GET")
 	auth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
 	auth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")

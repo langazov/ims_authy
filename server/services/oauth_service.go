@@ -435,6 +435,36 @@ func (s *OAuthService) generateRandomString(length int) string {
 	return base64.URLEncoding.EncodeToString(bytes)[:length]
 }
 
+// GenerateDirectLoginTokens creates OAuth tokens for direct login (bypassing authorization code flow)
+func (s *OAuthService) GenerateDirectLoginTokens(userID string, scopes []string) (*TokenResponse, error) {
+	clientID := "direct-login-client" // Special client ID for direct login
+	
+	accessToken, err := s.generateAccessToken(userID, clientID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := s.generateRefreshToken(accessToken, clientID, userID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate ID token for OpenID Connect
+	idToken, err := s.generateIDToken(userID, clientID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenResponse{
+		AccessToken:  accessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int(s.accessTokenExpiry.Seconds()),
+		RefreshToken: refreshToken,
+		IDToken:      idToken,
+		Scope:        s.joinScopes(scopes),
+	}, nil
+}
+
 func (s *OAuthService) joinScopes(scopes []string) string {
 	if len(scopes) == 0 {
 		return ""

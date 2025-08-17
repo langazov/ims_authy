@@ -3,24 +3,28 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
 	"oauth2-openid-server/models"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// SimpleTokenResponse represents a simple OAuth token response
+type SimpleTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+}
+
 type SocialAuthService struct {
-	config      *config.Config
-	userService *UserService
-	db          *database.MongoDB
+	userService         *UserService
+	db                  *database.MongoDB
+	socialProviderService *SocialProviderService
 }
 
 type SocialUserInfo struct {
@@ -58,149 +62,146 @@ type FacebookUserInfo struct {
 	LastName  string `json:"last_name"`
 }
 
-func NewSocialAuthService(config *config.Config, userService *UserService, db *database.MongoDB) *SocialAuthService {
+func NewSocialAuthService(userService *UserService, db *database.MongoDB) *SocialAuthService {
 	return &SocialAuthService{
-		config:      config,
-		userService: userService,
-		db:          db,
+		userService:         userService,
+		db:                  db,
+		socialProviderService: NewSocialProviderService(db),
 	}
 }
 
 // GetAuthURL generates the OAuth authorization URL for the specified provider
 func (s *SocialAuthService) GetAuthURL(provider, state string) (string, error) {
-	switch provider {
-	case "google":
-		if !s.config.Google.Enabled {
-			return "", errors.New("Google OAuth is not configured")
-		}
-		return s.getGoogleAuthURL(state), nil
-	case "github":
-		if !s.config.GitHub.Enabled {
-			return "", errors.New("GitHub OAuth is not configured")
-		}
-		return s.getGitHubAuthURL(state), nil
-	case "facebook":
-		if !s.config.Facebook.Enabled {
-			return "", errors.New("Facebook OAuth is not configured")
-		}
-		return s.getFacebookAuthURL(state), nil
-	case "apple":
-		if !s.config.Apple.Enabled {
-			return "", errors.New("Apple OAuth is not configured")
-		}
-		return s.getAppleAuthURL(state), nil
-	default:
-		return "", errors.New("unsupported OAuth provider")
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+	if err != nil {
+		return "", fmt.Errorf("provider '%s' not found", provider)
 	}
+
+	if !socialProvider.Enabled {
+		return "", fmt.Errorf("provider '%s' is not enabled", provider)
+	}
+
+	if socialProvider.ClientID == "" || socialProvider.ClientSecret == "" {
+		return "", fmt.Errorf("provider '%s' is not properly configured", provider)
+	}
+
+	return s.buildAuthURL(socialProvider, state), nil
+}
+
+// buildAuthURL constructs the OAuth authorization URL
+func (s *SocialAuthService) buildAuthURL(provider *models.SocialProvider, state string) string {
+	params := url.Values{}
+	params.Add("client_id", provider.ClientID)
+	params.Add("redirect_uri", provider.RedirectURL)
+	params.Add("state", state)
+	params.Add("response_type", "code")
+
+	// Add scopes
+	if len(provider.Scopes) > 0 {
+		params.Add("scope", strings.Join(provider.Scopes, " "))
+	}
+
+	// Provider-specific parameters
+	switch provider.Name {
+	case "google":
+		params.Add("access_type", "offline")
+		params.Add("prompt", "consent")
+	case "apple":
+		params.Add("response_mode", "form_post")
+	}
+
+	return fmt.Sprintf("%s?%s", provider.AuthURL, params.Encode())
 }
 
 // HandleCallback processes the OAuth callback and returns user information
 func (s *SocialAuthService) HandleCallback(provider, code, state string) (*models.User, error) {
-	switch provider {
-	case "google":
-		return s.handleGoogleCallback(code, state)
-	case "github":
-		return s.handleGitHubCallback(code, state)
-	case "facebook":
-		return s.handleFacebookCallback(code, state)
-	case "apple":
-		return s.handleAppleCallback(code, state)
-	default:
-		return nil, errors.New("unsupported OAuth provider")
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+	if err != nil {
+		return nil, fmt.Errorf("provider '%s' not found", provider)
 	}
+
+	if !socialProvider.Enabled {
+		return nil, fmt.Errorf("provider '%s' is not enabled", provider)
+	}
+
+	return s.handleProviderCallback(socialProvider, code, state)
 }
 
-// Google OAuth implementation
-func (s *SocialAuthService) getGoogleAuthURL(state string) string {
-	baseURL := "https://accounts.google.com/o/oauth2/v2/auth"
-	params := url.Values{}
-	params.Add("client_id", s.config.Google.ClientID)
-	params.Add("redirect_uri", s.config.Google.RedirectURL)
-	params.Add("scope", "openid email profile")
-	params.Add("response_type", "code")
-	params.Add("state", state)
-	params.Add("access_type", "offline")
-	params.Add("prompt", "consent")
-
-	return fmt.Sprintf("%s?%s", baseURL, params.Encode())
-}
-
-func (s *SocialAuthService) handleGoogleCallback(code, state string) (*models.User, error) {
+// handleProviderCallback handles OAuth callback for any provider
+func (s *SocialAuthService) handleProviderCallback(provider *models.SocialProvider, code, state string) (*models.User, error) {
 	// Exchange code for access token
-	tokenURL := "https://oauth2.googleapis.com/token"
-	data := url.Values{}
-	data.Set("client_id", s.config.Google.ClientID)
-	data.Set("client_secret", s.config.Google.ClientSecret)
-	data.Set("code", code)
-	data.Set("grant_type", "authorization_code")
-	data.Set("redirect_uri", s.config.Google.RedirectURL)
-
-	resp, err := http.PostForm(tokenURL, data)
+	tokenResp, err := s.exchangeCodeForToken(provider, code)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
-	}
-
-	// Get user info from Google
-	userInfoURL := "https://www.googleapis.com/oauth2/v2/userinfo"
-	req, _ := http.NewRequest("GET", userInfoURL, nil)
-	req.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err = client.Do(req)
+	// Get user info from provider
+	userInfo, err := s.getUserInfo(provider, tokenResp.AccessToken)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var googleUser GoogleUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&googleUser); err != nil {
 		return nil, err
 	}
 
 	// Create or get existing user
-	return s.createOrGetSocialUser(SocialUserInfo{
-		ID:        googleUser.ID,
-		Email:     googleUser.Email,
-		FirstName: googleUser.GivenName,
-		LastName:  googleUser.FamilyName,
-		Name:      googleUser.Name,
-		Provider:  "google",
-	})
+	return s.createOrGetSocialUser(userInfo, provider.Name)
 }
 
-// GitHub OAuth implementation
-func (s *SocialAuthService) getGitHubAuthURL(state string) string {
-	baseURL := "https://github.com/login/oauth/authorize"
-	params := url.Values{}
-	params.Add("client_id", s.config.GitHub.ClientID)
-	params.Add("redirect_uri", s.config.GitHub.RedirectURL)
-	params.Add("scope", "user:email")
-	params.Add("state", state)
 
-	return fmt.Sprintf("%s?%s", baseURL, params.Encode())
-}
-
-func (s *SocialAuthService) handleGitHubCallback(code, state string) (*models.User, error) {
-	// Exchange code for access token
-	tokenURL := "https://github.com/login/oauth/access_token"
+// exchangeCodeForToken exchanges authorization code for access token
+func (s *SocialAuthService) exchangeCodeForToken(provider *models.SocialProvider, code string) (*SimpleTokenResponse, error) {
 	data := url.Values{}
-	data.Set("client_id", s.config.GitHub.ClientID)
-	data.Set("client_secret", s.config.GitHub.ClientSecret)
+	data.Set("client_id", provider.ClientID)
+	data.Set("client_secret", provider.ClientSecret)
 	data.Set("code", code)
+	data.Set("grant_type", "authorization_code")
+	data.Set("redirect_uri", provider.RedirectURL)
 
-	req, _ := http.NewRequest("POST", tokenURL, strings.NewReader(data.Encode()))
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	var req *http.Request
+	var err error
+
+	if provider.Name == "github" {
+		req, err = http.NewRequest("POST", provider.TokenURL, strings.NewReader(data.Encode()))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	} else {
+		resp, err := http.PostForm(provider.TokenURL, data)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		var tokenResp SimpleTokenResponse
+		if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+			return nil, err
+		}
+		return &tokenResp, nil
+	}
+
+	// Handle GitHub-specific token exchange
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var tokenResp SimpleTokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return nil, err
+	}
+
+	return &tokenResp, nil
+}
+
+// getUserInfo gets user information from the provider
+func (s *SocialAuthService) getUserInfo(provider *models.SocialProvider, accessToken string) (*SocialUserInfo, error) {
+	req, err := http.NewRequest("GET", provider.UserInfoURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -209,49 +210,83 @@ func (s *SocialAuthService) handleGitHubCallback(code, state string) (*models.Us
 	}
 	defer resp.Body.Close()
 
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-		Scope       string `json:"scope"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+	var userInfo map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
 		return nil, err
 	}
 
-	// Get user info from GitHub
-	userInfoURL := "https://api.github.com/user"
-	req, _ = http.NewRequest("GET", userInfoURL, nil)
-	req.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
-
-	resp, err = client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var githubUser GitHubUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&githubUser); err != nil {
-		return nil, err
-	}
-
-	// Get email separately (GitHub might not include it in user info)
-	if githubUser.Email == "" {
-		githubUser.Email = s.getGitHubUserEmail(tokenResp.AccessToken)
-	}
-
-	// Parse name
-	firstName, lastName := s.parseName(githubUser.Name)
-
-	return s.createOrGetSocialUser(SocialUserInfo{
-		ID:        fmt.Sprintf("%d", githubUser.ID),
-		Email:     githubUser.Email,
-		FirstName: firstName,
-		LastName:  lastName,
-		Name:      githubUser.Name,
-		Provider:  "github",
-	})
+	// Parse user info based on provider
+	return s.parseUserInfo(userInfo, provider.Name, accessToken)
 }
+
+// parseUserInfo parses user information from different providers
+func (s *SocialAuthService) parseUserInfo(data map[string]interface{}, providerName, accessToken string) (*SocialUserInfo, error) {
+	userInfo := &SocialUserInfo{
+		Provider: providerName,
+	}
+
+	switch providerName {
+	case "google":
+		if id, ok := data["id"].(string); ok {
+			userInfo.ID = id
+		}
+		if email, ok := data["email"].(string); ok {
+			userInfo.Email = email
+		}
+		if name, ok := data["name"].(string); ok {
+			userInfo.Name = name
+		}
+		if givenName, ok := data["given_name"].(string); ok {
+			userInfo.FirstName = givenName
+		}
+		if familyName, ok := data["family_name"].(string); ok {
+			userInfo.LastName = familyName
+		}
+
+	case "github":
+		if id, ok := data["id"].(float64); ok {
+			userInfo.ID = fmt.Sprintf("%.0f", id)
+		}
+		if _, ok := data["login"].(string); ok && userInfo.Email == "" {
+			// GitHub might not return email in user info, need to fetch separately
+			email := s.getGitHubUserEmail(accessToken)
+			userInfo.Email = email
+		}
+		if email, ok := data["email"].(string); ok && email != "" {
+			userInfo.Email = email
+		}
+		if name, ok := data["name"].(string); ok {
+			userInfo.Name = name
+			firstName, lastName := s.parseName(name)
+			userInfo.FirstName = firstName
+			userInfo.LastName = lastName
+		}
+
+	case "facebook":
+		if id, ok := data["id"].(string); ok {
+			userInfo.ID = id
+		}
+		if email, ok := data["email"].(string); ok {
+			userInfo.Email = email
+		}
+		if name, ok := data["name"].(string); ok {
+			userInfo.Name = name
+		}
+		if firstName, ok := data["first_name"].(string); ok {
+			userInfo.FirstName = firstName
+		}
+		if lastName, ok := data["last_name"].(string); ok {
+			userInfo.LastName = lastName
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported provider: %s", providerName)
+	}
+
+	return userInfo, nil
+}
+
+
 
 func (s *SocialAuthService) getGitHubUserEmail(accessToken string) string {
 	emailURL := "https://api.github.com/user/emails"
@@ -288,92 +323,10 @@ func (s *SocialAuthService) getGitHubUserEmail(accessToken string) string {
 	return ""
 }
 
-// Facebook OAuth implementation
-func (s *SocialAuthService) getFacebookAuthURL(state string) string {
-	baseURL := "https://www.facebook.com/v18.0/dialog/oauth"
-	params := url.Values{}
-	params.Add("client_id", s.config.Facebook.ClientID)
-	params.Add("redirect_uri", s.config.Facebook.RedirectURL)
-	params.Add("scope", "email")
-	params.Add("response_type", "code")
-	params.Add("state", state)
 
-	return fmt.Sprintf("%s?%s", baseURL, params.Encode())
-}
-
-func (s *SocialAuthService) handleFacebookCallback(code, state string) (*models.User, error) {
-	// Exchange code for access token
-	tokenURL := "https://graph.facebook.com/v18.0/oauth/access_token"
-	params := url.Values{}
-	params.Add("client_id", s.config.Facebook.ClientID)
-	params.Add("client_secret", s.config.Facebook.ClientSecret)
-	params.Add("code", code)
-	params.Add("redirect_uri", s.config.Facebook.RedirectURL)
-
-	resp, err := http.Get(fmt.Sprintf("%s?%s", tokenURL, params.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var tokenResp struct {
-		AccessToken string `json:"access_token"`
-		TokenType   string `json:"token_type"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return nil, err
-	}
-
-	// Get user info from Facebook
-	userInfoURL := "https://graph.facebook.com/me?fields=id,name,email,first_name,last_name"
-	req, _ := http.NewRequest("GET", userInfoURL, nil)
-	req.Header.Set("Authorization", "Bearer "+tokenResp.AccessToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err = client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var facebookUser FacebookUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&facebookUser); err != nil {
-		return nil, err
-	}
-
-	return s.createOrGetSocialUser(SocialUserInfo{
-		ID:        facebookUser.ID,
-		Email:     facebookUser.Email,
-		FirstName: facebookUser.FirstName,
-		LastName:  facebookUser.LastName,
-		Name:      facebookUser.Name,
-		Provider:  "facebook",
-	})
-}
-
-// Apple OAuth implementation (simplified - Apple requires more complex JWT handling)
-func (s *SocialAuthService) getAppleAuthURL(state string) string {
-	baseURL := "https://appleid.apple.com/auth/authorize"
-	params := url.Values{}
-	params.Add("client_id", s.config.Apple.ClientID)
-	params.Add("redirect_uri", s.config.Apple.RedirectURL)
-	params.Add("scope", "name email")
-	params.Add("response_type", "code")
-	params.Add("state", state)
-	params.Add("response_mode", "form_post")
-
-	return fmt.Sprintf("%s?%s", baseURL, params.Encode())
-}
-
-func (s *SocialAuthService) handleAppleCallback(code, state string) (*models.User, error) {
-	// Apple OAuth requires more complex implementation with JWT validation
-	// For now, return an error indicating it needs additional setup
-	return nil, errors.New("Apple OAuth requires additional JWT configuration")
-}
 
 // Helper function to create or get existing social user
-func (s *SocialAuthService) createOrGetSocialUser(socialUser SocialUserInfo) (*models.User, error) {
+func (s *SocialAuthService) createOrGetSocialUser(socialUser *SocialUserInfo, provider string) (*models.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -428,68 +381,42 @@ func (s *SocialAuthService) parseName(fullName string) (string, string) {
 
 // GetEnabledProviders returns a list of enabled social providers
 func (s *SocialAuthService) GetEnabledProviders() []string {
-	var providers []string
-
-	if s.config.Google.Enabled {
-		providers = append(providers, "google")
-	}
-	if s.config.GitHub.Enabled {
-		providers = append(providers, "github")
-	}
-	if s.config.Facebook.Enabled {
-		providers = append(providers, "facebook")
-	}
-	if s.config.Apple.Enabled {
-		providers = append(providers, "apple")
+	providers, err := s.socialProviderService.GetEnabledProviders()
+	if err != nil {
+		return []string{}
 	}
 
-	return providers
+	var enabledProviderNames []string
+	for _, provider := range providers {
+		enabledProviderNames = append(enabledProviderNames, provider.Name)
+	}
+
+	return enabledProviderNames
 }
 
 // IsProviderEnabled checks if a specific provider is enabled
 func (s *SocialAuthService) IsProviderEnabled(provider string) bool {
-	switch provider {
-	case "google":
-		return s.config.Google.Enabled
-	case "github":
-		return s.config.GitHub.Enabled
-	case "facebook":
-		return s.config.Facebook.Enabled
-	case "apple":
-		return s.config.Apple.Enabled
-	default:
+	enabled, err := s.socialProviderService.IsProviderEnabled(provider)
+	if err != nil {
 		return false
 	}
+	return enabled
 }
 
 // GetProviderClientID returns the client ID for a specific provider
 func (s *SocialAuthService) GetProviderClientID(provider string) string {
-	switch provider {
-	case "google":
-		return s.config.Google.ClientID
-	case "github":
-		return s.config.GitHub.ClientID
-	case "facebook":
-		return s.config.Facebook.ClientID
-	case "apple":
-		return s.config.Apple.ClientID
-	default:
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+	if err != nil {
 		return ""
 	}
+	return socialProvider.ClientID
 }
 
 // IsProviderConfigured checks if a provider has all required configuration
 func (s *SocialAuthService) IsProviderConfigured(provider string) bool {
-	switch provider {
-	case "google":
-		return s.config.Google.ClientID != "" && s.config.Google.ClientSecret != ""
-	case "github":
-		return s.config.GitHub.ClientID != "" && s.config.GitHub.ClientSecret != ""
-	case "facebook":
-		return s.config.Facebook.ClientID != "" && s.config.Facebook.ClientSecret != ""
-	case "apple":
-		return s.config.Apple.ClientID != "" && s.config.Apple.ClientSecret != ""
-	default:
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+	if err != nil {
 		return false
 	}
+	return socialProvider.ClientID != "" && socialProvider.ClientSecret != ""
 }

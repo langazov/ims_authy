@@ -144,28 +144,24 @@ class AuthService {
   }
 
   async getCurrentUser(): Promise<User> {
-    // Check for direct login user first
+    const tokens = this.getStoredTokens()
+    if (tokens && tokens.id_token) {
+      const payload = this.parseJwtPayload(tokens.id_token)
+      return {
+        id: payload.sub,
+        email: payload.email,
+        scopes: payload.scopes || [],
+        groups: payload.groups || []
+      }
+    }
+
+    // Fallback to direct login user data
     const directUser = localStorage.getItem('direct_login_user')
     if (directUser) {
       return JSON.parse(directUser)
     }
 
-    const tokens = this.getStoredTokens()
-    if (!tokens) {
-      throw new Error('No tokens available')
-    }
-
-    if (!tokens.id_token) {
-      throw new Error('No ID token available')
-    }
-
-    const payload = this.parseJwtPayload(tokens.id_token)
-    return {
-      id: payload.sub,
-      email: payload.email,
-      scopes: payload.scopes || [],
-      groups: payload.groups || []
-    }
+    throw new Error('No authentication data available')
   }
 
   private parseJwtPayload(token: string): any {
@@ -195,23 +191,20 @@ class AuthService {
   }
 
   isAuthenticated(): boolean {
-    // Check for direct login user
-    const directUser = localStorage.getItem('direct_login_user')
-    if (directUser) {
+    const tokens = this.getStoredTokens()
+    if (tokens) {
+      // If stored_at is available, use it to calculate expiration properly
+      if (tokens.stored_at) {
+        const expiresAt = tokens.stored_at + (tokens.expires_in * 1000)
+        return Date.now() < expiresAt
+      }
+      // If we have tokens but no stored_at, assume they're valid for now
       return true
     }
 
-    const tokens = this.getStoredTokens()
-    if (!tokens) return false
-
-    // If stored_at is available, use it to calculate expiration properly
-    if (tokens.stored_at) {
-      const expiresAt = tokens.stored_at + (tokens.expires_in * 1000)
-      return Date.now() < expiresAt
-    }
-    
-    // Fallback: assume token was just issued (not accurate but safe)
-    return false
+    // Fallback to direct login user
+    const directUser = localStorage.getItem('direct_login_user')
+    return !!directUser
   }
 
   async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
@@ -239,7 +232,13 @@ class AuthService {
         return { success: false, twoFactorRequired: true }
       }
 
-      // For direct login, we don't get OAuth tokens, so we store user data differently
+      // Store OAuth tokens if they were provided
+      if (data.tokens) {
+        this.storeTokens(data.tokens)
+        // Remove any existing direct login user data
+        localStorage.removeItem('direct_login_user')
+      }
+
       const user: User = {
         id: data.user_id,
         email: data.email,
@@ -247,9 +246,6 @@ class AuthService {
         groups: data.groups || [],
         two_factor_verified: data.two_factor_verified || false,
       }
-
-      // Store user data temporarily (this would need better token management in production)
-      localStorage.setItem('direct_login_user', JSON.stringify(user))
       
       return { success: true, user }
     } catch (error) {

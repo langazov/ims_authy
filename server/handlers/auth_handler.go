@@ -96,12 +96,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Generate OAuth tokens for successful login
+	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), user.Scopes)
+	if err != nil {
+		http.Error(w, "Failed to generate authentication tokens", http.StatusInternalServerError)
+		return
+	}
+
 	response := map[string]interface{}{
 		"user_id": user.ID.Hex(),
 		"email":   user.Email,
 		"scopes":  user.Scopes,
 		"groups":  user.Groups,
 		"two_factor_verified": twoFactorRequired,
+		"tokens": tokens,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -18,6 +18,7 @@ interface TwoFactorSetupProps {
 interface SetupResponse {
   secret: string
   qr_code_url: string
+  qr_code_image: string // Base64 encoded PNG image
   backup_codes: string[]
 }
 
@@ -64,6 +65,11 @@ export default function TwoFactorSetup({ userId, onSetupComplete, onCancel }: Tw
       return
     }
 
+    if (!setupData?.secret) {
+      setError('Setup data not available. Please restart the setup process.')
+      return
+    }
+
     setLoading(true)
     setError('')
 
@@ -76,6 +82,7 @@ export default function TwoFactorSetup({ userId, onSetupComplete, onCancel }: Tw
         body: JSON.stringify({
           user_id: userId,
           code: verificationCode,
+          secret: setupData.secret,
         }),
       })
 
@@ -178,7 +185,7 @@ export default function TwoFactorSetup({ userId, onSetupComplete, onCancel }: Tw
               <div className="flex justify-center">
                 <div className="p-4 bg-white rounded-lg">
                   <img 
-                    src={setupData.qr_code_url} 
+                    src={`data:image/png;base64,${setupData.qr_code_image}`} 
                     alt="QR Code for 2FA setup" 
                     className="w-48 h-48"
                   />
