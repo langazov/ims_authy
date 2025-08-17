@@ -15,7 +15,7 @@ import (
 // CORS middleware
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -44,13 +44,20 @@ func main() {
 	userService := services.NewUserService(db)
 	groupService := services.NewGroupService(db)
 	clientService := services.NewClientService(db)
+	scopeService := services.NewScopeService(db.Database)
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
 	socialAuthService := services.NewSocialAuthService(cfg, userService, db)
+
+	// Initialize default scopes if none exist
+	if err := scopeService.InitializeDefaultScopes(); err != nil {
+		log.Printf("Warning: Failed to initialize default scopes: %v", err)
+	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService)
 	userHandler := handlers.NewUserHandler(userService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
+	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
 	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, oauthService)
 
@@ -81,6 +88,12 @@ func main() {
 	api.HandleFunc("/clients/{id}/activate", clientHandler.ActivateClient).Methods("PATCH")
 	api.HandleFunc("/clients/{id}/deactivate", clientHandler.DeactivateClient).Methods("PATCH")
 	api.HandleFunc("/clients/{id}/regenerate-secret", clientHandler.RegenerateSecret).Methods("POST")
+
+	api.HandleFunc("/scopes", scopeHandler.GetAllScopes).Methods("GET")
+	api.HandleFunc("/scopes", scopeHandler.CreateScope).Methods("POST")
+	api.HandleFunc("/scopes/{id}", scopeHandler.UpdateScope).Methods("PUT")
+	api.HandleFunc("/scopes/{id}", scopeHandler.DeleteScope).Methods("DELETE")
+	api.HandleFunc("/scopes/{id}", scopeHandler.HandleOptions).Methods("OPTIONS")
 
 	api.HandleFunc("/dashboard/stats", dashboardHandler.GetDashboardStats).Methods("GET")
 

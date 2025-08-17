@@ -24,6 +24,16 @@ type CreateUserRequest struct {
 	Scopes    []string `json:"scopes"`
 }
 
+type UpdateUserRequest struct {
+	Email     string   `json:"email"`
+	Username  string   `json:"username"`
+	FirstName string   `json:"first_name"`
+	LastName  string   `json:"last_name"`
+	Groups    []string `json:"groups"`
+	Scopes    []string `json:"scopes"`
+	Active    bool     `json:"active"`
+}
+
 func NewUserHandler(userService *services.UserService) *UserHandler {
 	return &UserHandler{
 		userService: userService,
@@ -140,7 +150,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	var updateReq CreateUserRequest
+	var updateReq UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -152,6 +162,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		FirstName: updateReq.FirstName,
 		LastName:  updateReq.LastName,
 		Groups:    updateReq.Groups,
+		Active:    updateReq.Active,
 		Scopes:    updateReq.Scopes,
 	}
 

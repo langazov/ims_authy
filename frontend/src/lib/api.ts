@@ -97,6 +97,13 @@ class ApiClient {
   dashboard = {
     getStats: () => this.get<any>('/api/v1/dashboard/stats'),
   }
+
+  scopes = {
+    getAll: () => this.get<any[]>('/api/v1/scopes'),
+    create: (data: any) => this.post<any>('/api/v1/scopes', data),
+    update: (id: string, data: any) => this.put<any>(`/api/v1/scopes/${id}`, data),
+    delete: (id: string) => this.delete<any>(`/api/v1/scopes/${id}`),
+  }
 }
 
 export const apiClient = new ApiClient()

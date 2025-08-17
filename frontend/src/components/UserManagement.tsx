@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Search, Edit, Trash2 } from 'lucide-react'
 import UserForm from './UserForm'
@@ -156,6 +156,12 @@ export default function UserManagement() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
+              <DialogDescription>
+                {selectedUser 
+                  ? 'Update user information, permissions, and account status.' 
+                  : 'Create a new user account with appropriate permissions and access levels.'
+                }
+              </DialogDescription>
             </DialogHeader>
             <UserForm
               user={selectedUser}

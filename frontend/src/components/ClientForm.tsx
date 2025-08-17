@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Trash2, Plus } from 'lucide-react'
+import { apiClient } from '@/lib/api'
 
 interface OAuthClient {
   id: string
@@ -29,20 +30,20 @@ interface ClientFormData {
   active: boolean
 }
 
+interface Scope {
+  id: string
+  name: string
+  display_name: string
+  description: string
+  category: string
+  active: boolean
+}
+
 interface ClientFormProps {
   client?: OAuthClient | null
   onSubmit: (clientData: ClientFormData) => void
   onCancel: () => void
 }
-
-const AVAILABLE_SCOPES = [
-  'read',
-  'write',
-  'openid',
-  'profile',
-  'email',
-  'admin'
-]
 
 const AVAILABLE_GRANT_TYPES = [
   'authorization_code',
@@ -51,6 +52,7 @@ const AVAILABLE_GRANT_TYPES = [
 ]
 
 export default function ClientForm({ client, onSubmit, onCancel }: ClientFormProps) {
+  const [availableScopes, setAvailableScopes] = useState<Scope[]>([])
   const [formData, setFormData] = useState({
     name: client?.name || '',
     description: client?.description || '',
@@ -59,6 +61,21 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
     grant_types: client?.grant_types || ['authorization_code', 'refresh_token'],
     active: client?.active ?? true
   })
+
+  // Fetch available scopes from API
+  useEffect(() => {
+    const fetchScopes = async () => {
+      try {
+        const scopes = await apiClient.scopes.getAll()
+        setAvailableScopes(scopes || [])
+      } catch (error) {
+        console.error('Failed to fetch scopes:', error)
+        setAvailableScopes([])
+      }
+    }
+
+    fetchScopes()
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -196,15 +213,15 @@ export default function ClientForm({ client, onSubmit, onCancel }: ClientFormPro
       <div className="space-y-3">
         <Label>OAuth Scopes</Label>
         <div className="grid grid-cols-2 gap-2">
-          {AVAILABLE_SCOPES.map((scope) => (
-            <div key={scope} className="flex items-center space-x-2">
+          {availableScopes.map((scope) => (
+            <div key={scope.id} className="flex items-center space-x-2">
               <Checkbox
-                id={`scope-${scope}`}
-                checked={formData.scopes.includes(scope)}
-                onCheckedChange={(checked) => handleScopeChange(scope, checked as boolean)}
+                id={`scope-${scope.id}`}
+                checked={formData.scopes.includes(scope.name)}
+                onCheckedChange={(checked) => handleScopeChange(scope.name, checked as boolean)}
               />
-              <Label htmlFor={`scope-${scope}`} className="text-sm">
-                {scope}
+              <Label htmlFor={`scope-${scope.id}`} className="text-sm">
+                {scope.display_name}
               </Label>
             </div>
           ))}

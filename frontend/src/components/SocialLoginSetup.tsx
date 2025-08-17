@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Copy, ExternalLink, Settings, Eye, EyeOff, CheckCircle, XCircle, Info } from 'lucide-react'
 import { toast } from 'sonner'
@@ -386,6 +386,9 @@ export default function SocialLoginSetup() {
                     <DialogContent className="max-w-2xl">
                       <DialogHeader>
                         <DialogTitle>Configure {provider.name} OAuth</DialogTitle>
+                        <DialogDescription>
+                          Set up OAuth2 credentials and configuration for {provider.name} social login integration.
+                        </DialogDescription>
                       </DialogHeader>
                       <ProviderConfigForm
                         provider={provider}

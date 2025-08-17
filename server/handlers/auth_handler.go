@@ -101,9 +101,32 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scopes := strings.Fields(scope)
+	requestedScopes := strings.Fields(scope)
 
-	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, scopes, codeChallenge, codeChallengeMethod)
+	// Get user's actual permissions from database
+	user, err := h.userService.GetUserByID(userID)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusUnauthorized)
+		return
+	}
+
+	// Only grant scopes that the user actually has permission for
+	var grantedScopes []string
+	for _, requestedScope := range requestedScopes {
+		for _, userScope := range user.Scopes {
+			if requestedScope == userScope {
+				grantedScopes = append(grantedScopes, requestedScope)
+				break
+			}
+		}
+	}
+
+	// If no valid scopes, grant minimal read access
+	if len(grantedScopes) == 0 {
+		grantedScopes = []string{"read"}
+	}
+
+	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, grantedScopes, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
 		return

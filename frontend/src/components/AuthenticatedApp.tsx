@@ -1,18 +1,39 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
-import { ShieldClose, Group, Cog, ChartColumn, LogOut, Users } from 'lucide-react'
+import { ShieldClose, Group, Cog, ChartColumn, LogOut, Users, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/contexts/AuthContext'
+import { usePermissions } from '@/hooks/usePermissions'
 import Dashboard from '@/components/Dashboard'
 import UserManagement from '@/components/UserManagement'
 import GroupManagement from '@/components/GroupManagement'
 import ClientManagement from '@/components/ClientManagement'
 import SocialLoginSetup from '@/components/SocialLoginSetup'
+import ScopeManagement from '@/components/ScopeManagement'
 
 export default function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const { user, logout } = useAuth()
+  const { canManageUsers, canManageClients, canManageGroups, isAdmin } = usePermissions()
+
+  // Available tabs based on permissions
+  const availableTabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: ChartColumn, component: Dashboard, available: true },
+    { id: 'users', label: 'Users', icon: Users, component: UserManagement, available: canManageUsers() },
+    { id: 'groups', label: 'Groups', icon: Group, component: GroupManagement, available: canManageGroups() },
+    { id: 'clients', label: 'OAuth Clients', icon: Cog, component: ClientManagement, available: canManageClients() },
+    { id: 'scopes', label: 'Scopes', icon: Settings, component: ScopeManagement, available: isAdmin() },
+    { id: 'social', label: 'Social Login', icon: ShieldClose, component: SocialLoginSetup, available: isAdmin() }
+  ].filter(tab => tab.available)
+
+  // Ensure active tab is available to user
+  useEffect(() => {
+    const availableTabIds = availableTabs.map(tab => tab.id)
+    if (!availableTabIds.includes(activeTab)) {
+      setActiveTab('dashboard')
+    }
+  }, [availableTabs, activeTab])
 
   return (
     <div className="min-h-screen bg-background">
@@ -30,7 +51,7 @@ export default function AuthenticatedApp() {
               <div className="text-right">
                 <p className="text-sm font-medium text-foreground">{user?.email}</p>
                 <p className="text-xs text-muted-foreground">
-                  {user?.groups?.length ? `Groups: ${user.groups.join(', ')}` : 'No groups'}
+                  {user?.scopes?.length ? `Permissions: ${user.scopes.join(', ')}` : 'No permissions'}
                 </p>
               </div>
               <Button variant="outline" size="sm" onClick={logout}>
@@ -44,48 +65,26 @@ export default function AuthenticatedApp() {
 
       <main className="container mx-auto px-6 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
-            <TabsTrigger value="dashboard" className="flex items-center space-x-2">
-              <ChartColumn size={16} />
-              <span>Dashboard</span>
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center space-x-2">
-              <Users size={16} />
-              <span>Users</span>
-            </TabsTrigger>
-            <TabsTrigger value="groups" className="flex items-center space-x-2">
-              <Group size={16} />
-              <span>Groups</span>
-            </TabsTrigger>
-            <TabsTrigger value="clients" className="flex items-center space-x-2">
-              <Cog size={16} />
-              <span>OAuth Clients</span>
-            </TabsTrigger>
-            <TabsTrigger value="social" className="flex items-center space-x-2">
-              <ShieldClose size={16} />
-              <span>Social Login</span>
-            </TabsTrigger>
+          <TabsList className={`grid w-full mb-8`} style={{ gridTemplateColumns: `repeat(${availableTabs.length}, minmax(0, 1fr))` }}>
+            {availableTabs.map((tab) => {
+              const IconComponent = tab.icon
+              return (
+                <TabsTrigger key={tab.id} value={tab.id} className="flex items-center space-x-2">
+                  <IconComponent size={16} />
+                  <span>{tab.label}</span>
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
 
-          <TabsContent value="dashboard">
-            <Dashboard />
-          </TabsContent>
-          
-          <TabsContent value="users">
-            <UserManagement />
-          </TabsContent>
-          
-          <TabsContent value="groups">
-            <GroupManagement />
-          </TabsContent>
-          
-          <TabsContent value="clients">
-            <ClientManagement />
-          </TabsContent>
-          
-          <TabsContent value="social">
-            <SocialLoginSetup />
-          </TabsContent>
+          {availableTabs.map((tab) => {
+            const ComponentToRender = tab.component
+            return (
+              <TabsContent key={tab.id} value={tab.id}>
+                <ComponentToRender />
+              </TabsContent>
+            )
+          })}
         </Tabs>
       </main>
       

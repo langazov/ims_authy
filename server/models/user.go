@@ -80,3 +80,14 @@ type RefreshToken struct {
 	Revoked     bool               `bson:"revoked" json:"revoked"`
 	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
 }
+
+type Scope struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Name        string             `bson:"name" json:"name"`
+	DisplayName string             `bson:"display_name" json:"display_name"`
+	Description string             `bson:"description" json:"description"`
+	Category    string             `bson:"category" json:"category"`
+	Active      bool               `bson:"active" json:"active"`
+	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
+}

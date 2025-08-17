@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Search, Edit, Trash2, Copy, Eye, EyeOff, RefreshCw } from 'lucide-react'
@@ -308,6 +308,12 @@ export default function ClientManagement() {
               <DialogTitle>
                 {selectedClient ? 'Edit OAuth Client' : 'Register New OAuth Client'}
               </DialogTitle>
+              <DialogDescription>
+                {selectedClient 
+                  ? 'Modify OAuth client settings including redirect URIs, scopes, and permissions.' 
+                  : 'Create a new OAuth2 client application with custom redirect URIs and permission scopes.'
+                }
+              </DialogDescription>
             </DialogHeader>
             <ClientForm
               client={selectedClient}

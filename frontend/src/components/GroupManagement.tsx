@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Plus, Search, Edit, Trash2, Users } from 'lucide-react'
 import GroupForm from './GroupForm'
 import AccessDenied from './AccessDenied'
@@ -200,6 +200,12 @@ export default function GroupManagement() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{selectedGroup ? 'Edit Group' : 'Create New Group'}</DialogTitle>
+              <DialogDescription>
+                {selectedGroup 
+                  ? 'Modify group settings, permissions, and member assignments.' 
+                  : 'Create a new user group with specific permissions and access levels.'
+                }
+              </DialogDescription>
             </DialogHeader>
             <GroupForm
               group={selectedGroup}
