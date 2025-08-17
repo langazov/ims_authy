@@ -212,7 +212,8 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
 	// Get enabled social providers
-	enabledProviders := h.socialAuthService.GetEnabledProviders()
+	tenantID := "" // Default tenant for auth handler
+	enabledProviders := h.socialAuthService.GetEnabledProviders(tenantID)
 	socialButtons := ""
 	
 	for _, provider := range enabledProviders {

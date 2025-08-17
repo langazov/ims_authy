@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"oauth2-openid-server/services"
+	"github.com/gorilla/mux"
 )
 
 type contextKey string
@@ -19,11 +20,26 @@ func TenantMiddleware(tenantService *services.TenantService) func(http.Handler) 
 			// Try to resolve tenant from various sources
 			var tenantID string
 
-			// 1. Check for X-Tenant-ID header (for API clients)
-			if header := r.Header.Get("X-Tenant-ID"); header != "" {
-				tenantID = header
-			} else {
-				// 2. Check subdomain/domain from Host header
+			// 1. Check for tenant ID in URL path (e.g., /tenant/{tenantId}/...)
+			if vars := mux.Vars(r); vars != nil {
+				if urlTenantID := vars["tenantId"]; urlTenantID != "" {
+					// Validate that the tenant exists
+					tenant, err := tenantService.GetTenantByID(urlTenantID)
+					if err == nil && tenant != nil {
+						tenantID = tenant.ID.Hex()
+					}
+				}
+			}
+
+			// 2. Check for X-Tenant-ID header (for API clients)
+			if tenantID == "" {
+				if header := r.Header.Get("X-Tenant-ID"); header != "" {
+					tenantID = header
+				}
+			}
+
+			// 3. Check subdomain/domain from Host header
+			if tenantID == "" {
 				host := r.Host
 				// Remove port if present
 				if colonIndex := strings.Index(host, ":"); colonIndex != -1 {

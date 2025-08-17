@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
 
@@ -44,6 +45,8 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
 	var createReq CreateGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -55,7 +58,7 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, _ := h.groupService.GetGroupByName(createReq.Name)
+	existing, _ := h.groupService.GetGroupByName(createReq.Name, tenantID)
 	if existing != nil {
 		http.Error(w, "Group name already exists", http.StatusConflict)
 		return
@@ -66,6 +69,7 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		Description: createReq.Description,
 		Scopes:      createReq.Scopes,
 		Members:     createReq.Members,
+		TenantID:    tenantID,
 	}
 
 	if group.Scopes == nil {
@@ -91,7 +95,9 @@ func (h *GroupHandler) GetGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	groups, err := h.groupService.GetAllGroups()
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
+	groups, err := h.groupService.GetAllGroups(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get groups: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -113,8 +119,9 @@ func (h *GroupHandler) GetGroup(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	groupID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	group, err := h.groupService.GetGroupByID(groupID)
+	group, err := h.groupService.GetGroupByID(groupID, tenantID)
 	if err != nil {
 		http.Error(w, "Group not found", http.StatusNotFound)
 		return
@@ -132,6 +139,7 @@ func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	groupID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	var updateReq UpdateGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
@@ -144,7 +152,7 @@ func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, _ := h.groupService.GetGroupByName(updateReq.Name)
+	existing, _ := h.groupService.GetGroupByName(updateReq.Name, tenantID)
 	if existing != nil && existing.ID.Hex() != groupID {
 		http.Error(w, "Group name already exists", http.StatusConflict)
 		return
@@ -164,12 +172,12 @@ func (h *GroupHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 		group.Members = []string{}
 	}
 
-	if err := h.groupService.UpdateGroup(groupID, group); err != nil {
+	if err := h.groupService.UpdateGroup(groupID, tenantID, group); err != nil {
 		http.Error(w, "Failed to update group: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	updatedGroup, err := h.groupService.GetGroupByID(groupID)
+	updatedGroup, err := h.groupService.GetGroupByID(groupID, tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get updated group", http.StatusInternalServerError)
 		return
@@ -187,8 +195,9 @@ func (h *GroupHandler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	groupID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	if err := h.groupService.DeleteGroup(groupID); err != nil {
+	if err := h.groupService.DeleteGroup(groupID, tenantID); err != nil {
 		http.Error(w, "Failed to delete group: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -204,6 +213,7 @@ func (h *GroupHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	groupID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	var addReq AddMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&addReq); err != nil {
@@ -216,7 +226,7 @@ func (h *GroupHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.groupService.AddMemberToGroup(groupID, addReq.UserID); err != nil {
+	if err := h.groupService.AddMemberToGroup(groupID, addReq.UserID, tenantID); err != nil {
 		http.Error(w, "Failed to add member: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -234,8 +244,9 @@ func (h *GroupHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 	userID := vars["userId"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	if err := h.groupService.RemoveMemberFromGroup(groupID, userID); err != nil {
+	if err := h.groupService.RemoveMemberFromGroup(groupID, userID, tenantID); err != nil {
 		http.Error(w, "Failed to remove member: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -252,8 +263,9 @@ func (h *GroupHandler) GetUserGroups(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	userID := vars["userId"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	groups, err := h.groupService.GetGroupsByUser(userID)
+	groups, err := h.groupService.GetGroupsByUser(userID, tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get user groups: "+err.Error(), http.StatusInternalServerError)
 		return

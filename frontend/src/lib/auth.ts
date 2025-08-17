@@ -1,4 +1,5 @@
 import { config } from './config'
+import { TenantUrlBuilder } from './tenantUrls'
 
 export interface User {
   id: string
@@ -21,6 +22,10 @@ export interface AuthTokens {
 class AuthService {
   private readonly STORAGE_KEY = 'auth_tokens'
   private readonly CODE_VERIFIER_KEY = 'code_verifier'
+
+  private getActiveTenantId(): string | null {
+    return localStorage.getItem('activeTenantId')
+  }
 
   generateCodeVerifier(): string {
     const array = new Uint8Array(32)
@@ -61,7 +66,13 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    window.location.href = `${config.oauth.authUrl}?${params.toString()}`
+    // Use tenant-specific URL if a tenant is selected
+    const activeTenantId = this.getActiveTenantId()
+    const authUrl = activeTenantId 
+      ? TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
+      : TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
+
+    window.location.href = authUrl
   }
 
   async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple'): Promise<void> {
@@ -82,7 +93,13 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    window.location.href = `${config.apiBaseUrl}/auth/${provider}/oauth?${params.toString()}`
+    // Use tenant-specific URL if a tenant is selected
+    const activeTenantId = this.getActiveTenantId()
+    const socialUrl = activeTenantId 
+      ? TenantUrlBuilder.buildSocialLoginUrl(activeTenantId, provider, params)
+      : TenantUrlBuilder.buildLegacySocialLoginUrl(provider, params)
+
+    window.location.href = socialUrl
   }
 
   async handleCallback(code: string, state: string): Promise<User> {
@@ -122,8 +139,14 @@ class AuthService {
     tokenData.append('client_id', config.oauth.clientId)
     tokenData.append('code_verifier', codeVerifier)
 
-    console.debug('[auth] exchanging code for tokens', { tokenUrl: config.oauth.tokenUrl })
-    const response = await fetch(config.oauth.tokenUrl, {
+    // Use tenant-specific URL if a tenant is selected
+    const activeTenantId = this.getActiveTenantId()
+    const tokenUrl = activeTenantId 
+      ? TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
+      : TenantUrlBuilder.buildLegacyOAuthTokenUrl()
+
+    console.debug('[auth] exchanging code for tokens', { tokenUrl })
+    const response = await fetch(tokenUrl, {
       method: 'POST',
       body: tokenData
     })
@@ -236,7 +259,13 @@ class AuthService {
 
   async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/login`, {
+      // Use tenant-specific URL if a tenant is selected
+      const activeTenantId = this.getActiveTenantId()
+      const loginUrl = activeTenantId 
+        ? TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
+        : TenantUrlBuilder.buildLegacyDirectLoginUrl()
+
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

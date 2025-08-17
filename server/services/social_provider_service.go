@@ -26,7 +26,7 @@ func NewSocialProviderService(db *database.MongoDB) *SocialProviderService {
 }
 
 // InitializeDefaultProviders creates default social provider configurations
-func (s *SocialProviderService) InitializeDefaultProviders() error {
+func (s *SocialProviderService) InitializeDefaultProviders(tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -94,14 +94,20 @@ func (s *SocialProviderService) InitializeDefaultProviders() error {
 	}
 
 	for _, provider := range defaultProviders {
-		// Check if provider already exists
-		count, err := s.providerCollection.CountDocuments(ctx, bson.M{"name": provider.Name})
+		// Check if provider already exists for this tenant
+		filter := bson.M{"name": provider.Name}
+		if tenantID != "" {
+			filter["tenant_id"] = tenantID
+		}
+		
+		count, err := s.providerCollection.CountDocuments(ctx, filter)
 		if err != nil {
 			return err
 		}
 
-		// Only insert if it doesn't exist
+		// Only insert if it doesn't exist for this tenant
 		if count == 0 {
+			provider.TenantID = tenantID
 			_, err = s.providerCollection.InsertOne(ctx, provider)
 			if err != nil {
 				return err
@@ -113,11 +119,16 @@ func (s *SocialProviderService) InitializeDefaultProviders() error {
 }
 
 // GetAllProviders returns all social providers
-func (s *SocialProviderService) GetAllProviders() ([]models.SocialProvider, error) {
+func (s *SocialProviderService) GetAllProviders(tenantID string) ([]models.SocialProvider, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.providerCollection.Find(ctx, bson.M{})
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.providerCollection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -132,11 +143,16 @@ func (s *SocialProviderService) GetAllProviders() ([]models.SocialProvider, erro
 }
 
 // GetEnabledProviders returns only enabled social providers
-func (s *SocialProviderService) GetEnabledProviders() ([]models.SocialProvider, error) {
+func (s *SocialProviderService) GetEnabledProviders(tenantID string) ([]models.SocialProvider, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.providerCollection.Find(ctx, bson.M{"enabled": true})
+	filter := bson.M{"enabled": true}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.providerCollection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -151,12 +167,17 @@ func (s *SocialProviderService) GetEnabledProviders() ([]models.SocialProvider, 
 }
 
 // GetProviderByName returns a social provider by name
-func (s *SocialProviderService) GetProviderByName(name string) (*models.SocialProvider, error) {
+func (s *SocialProviderService) GetProviderByName(name, tenantID string) (*models.SocialProvider, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	filter := bson.M{"name": name}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var provider models.SocialProvider
-	err := s.providerCollection.FindOne(ctx, bson.M{"name": name}).Decode(&provider)
+	err := s.providerCollection.FindOne(ctx, filter).Decode(&provider)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("provider not found")
@@ -168,7 +189,7 @@ func (s *SocialProviderService) GetProviderByName(name string) (*models.SocialPr
 }
 
 // UpdateProvider updates a social provider
-func (s *SocialProviderService) UpdateProvider(id string, provider *models.SocialProvider) error {
+func (s *SocialProviderService) UpdateProvider(id, tenantID string, provider *models.SocialProvider) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -177,9 +198,14 @@ func (s *SocialProviderService) UpdateProvider(id string, provider *models.Socia
 		return errors.New("invalid provider ID")
 	}
 
+	filter := bson.M{"_id": objectID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	provider.UpdatedAt = time.Now()
 
-	_, err = s.providerCollection.UpdateOne(ctx, bson.M{"_id": objectID}, bson.M{
+	_, err = s.providerCollection.UpdateOne(ctx, filter, bson.M{
 		"$set": provider,
 	})
 
@@ -200,7 +226,7 @@ func (s *SocialProviderService) CreateProvider(provider *models.SocialProvider) 
 }
 
 // DeleteProvider deletes a social provider
-func (s *SocialProviderService) DeleteProvider(id string) error {
+func (s *SocialProviderService) DeleteProvider(id, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -209,13 +235,18 @@ func (s *SocialProviderService) DeleteProvider(id string) error {
 		return errors.New("invalid provider ID")
 	}
 
-	_, err = s.providerCollection.DeleteOne(ctx, bson.M{"_id": objectID})
+	filter := bson.M{"_id": objectID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	_, err = s.providerCollection.DeleteOne(ctx, filter)
 	return err
 }
 
 // IsProviderEnabled checks if a provider is enabled
-func (s *SocialProviderService) IsProviderEnabled(name string) (bool, error) {
-	provider, err := s.GetProviderByName(name)
+func (s *SocialProviderService) IsProviderEnabled(name, tenantID string) (bool, error) {
+	provider, err := s.GetProviderByName(name, tenantID)
 	if err != nil {
 		return false, err
 	}

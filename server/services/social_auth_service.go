@@ -71,8 +71,8 @@ func NewSocialAuthService(userService *UserService, db *database.MongoDB) *Socia
 }
 
 // GetAuthURL generates the OAuth authorization URL for the specified provider
-func (s *SocialAuthService) GetAuthURL(provider, state string) (string, error) {
-	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+func (s *SocialAuthService) GetAuthURL(provider, state, tenantID string) (string, error) {
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider, tenantID)
 	if err != nil {
 		return "", fmt.Errorf("provider '%s' not found", provider)
 	}
@@ -114,8 +114,8 @@ func (s *SocialAuthService) buildAuthURL(provider *models.SocialProvider, state 
 }
 
 // HandleCallback processes the OAuth callback and returns user information
-func (s *SocialAuthService) HandleCallback(provider, code, state string) (*models.User, error) {
-	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+func (s *SocialAuthService) HandleCallback(provider, code, state, tenantID string) (*models.User, error) {
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("provider '%s' not found", provider)
 	}
@@ -380,8 +380,8 @@ func (s *SocialAuthService) parseName(fullName string) (string, string) {
 }
 
 // GetEnabledProviders returns a list of enabled social providers
-func (s *SocialAuthService) GetEnabledProviders() []string {
-	providers, err := s.socialProviderService.GetEnabledProviders()
+func (s *SocialAuthService) GetEnabledProviders(tenantID string) []string {
+	providers, err := s.socialProviderService.GetEnabledProviders(tenantID)
 	if err != nil {
 		return []string{}
 	}
@@ -395,8 +395,8 @@ func (s *SocialAuthService) GetEnabledProviders() []string {
 }
 
 // IsProviderEnabled checks if a specific provider is enabled
-func (s *SocialAuthService) IsProviderEnabled(provider string) bool {
-	enabled, err := s.socialProviderService.IsProviderEnabled(provider)
+func (s *SocialAuthService) IsProviderEnabled(provider, tenantID string) bool {
+	enabled, err := s.socialProviderService.IsProviderEnabled(provider, tenantID)
 	if err != nil {
 		return false
 	}
@@ -404,8 +404,8 @@ func (s *SocialAuthService) IsProviderEnabled(provider string) bool {
 }
 
 // GetProviderClientID returns the client ID for a specific provider
-func (s *SocialAuthService) GetProviderClientID(provider string) string {
-	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+func (s *SocialAuthService) GetProviderClientID(provider, tenantID string) string {
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider, tenantID)
 	if err != nil {
 		return ""
 	}
@@ -413,8 +413,8 @@ func (s *SocialAuthService) GetProviderClientID(provider string) string {
 }
 
 // IsProviderConfigured checks if a provider has all required configuration
-func (s *SocialAuthService) IsProviderConfigured(provider string) bool {
-	socialProvider, err := s.socialProviderService.GetProviderByName(provider)
+func (s *SocialAuthService) IsProviderConfigured(provider, tenantID string) bool {
+	socialProvider, err := s.socialProviderService.GetProviderByName(provider, tenantID)
 	if err != nil {
 		return false
 	}

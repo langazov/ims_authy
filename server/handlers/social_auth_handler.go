@@ -38,7 +38,8 @@ func (h *SocialAuthHandler) GetProviders(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	providers := h.socialAuthService.GetEnabledProviders()
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	providers := h.socialAuthService.GetEnabledProviders(tenantID)
 	response := SocialProvidersResponse{
 		Providers: providers,
 	}
@@ -56,6 +57,7 @@ func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.R
 
 	vars := mux.Vars(r)
 	provider := vars["provider"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	// Generate a random state parameter for security
 	state := h.generateState()
@@ -71,7 +73,7 @@ func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.R
 	})
 
 	// Get authorization URL from social provider
-	authURL, err := h.socialAuthService.GetAuthURL(provider, state)
+	authURL, err := h.socialAuthService.GetAuthURL(provider, state, tenantID)
 	if err != nil {
 		http.Error(w, "Provider not configured: "+err.Error(), http.StatusBadRequest)
 		return
@@ -128,7 +130,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 	})
 
 	// Handle the callback and get user information
-	user, err := h.socialAuthService.HandleCallback(provider, code, state)
+	user, err := h.socialAuthService.HandleCallback(provider, code, state, tenantID)
 	if err != nil {
 		http.Error(w, "Failed to authenticate with "+provider+": "+err.Error(), http.StatusInternalServerError)
 		return
@@ -273,7 +275,8 @@ func (h *SocialAuthHandler) SocialOAuthAuthorize(w http.ResponseWriter, r *http.
 	})
 
 	// Get authorization URL from social provider
-	authURL, err := h.socialAuthService.GetAuthURL(provider, socialState)
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	authURL, err := h.socialAuthService.GetAuthURL(provider, socialState, tenantID)
 	if err != nil {
 		http.Error(w, "Provider not configured: "+err.Error(), http.StatusBadRequest)
 		return
@@ -343,55 +346,30 @@ func (h *SocialAuthHandler) GetProviderConfigs(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	configs := []ProviderConfig{
-		{
-			ID:          "google",
-			Name:        "Google",
-			Enabled:     h.socialAuthService.IsProviderEnabled("google"),
-			ClientID:    h.socialAuthService.GetProviderClientID("google"),
-			RedirectURL: "http://localhost:8080/auth/google/callback",
-			Scopes:      []string{"openid", "profile", "email"},
-			AuthURL:     "https://accounts.google.com/o/oauth2/v2/auth",
-			TokenURL:    "https://oauth2.googleapis.com/token",
-			UserInfoURL: "https://www.googleapis.com/oauth2/v2/userinfo",
-			Configured:  h.socialAuthService.IsProviderConfigured("google"),
-		},
-		{
-			ID:          "github",
-			Name:        "GitHub",
-			Enabled:     h.socialAuthService.IsProviderEnabled("github"),
-			ClientID:    h.socialAuthService.GetProviderClientID("github"),
-			RedirectURL: "http://localhost:8080/auth/github/callback",
-			Scopes:      []string{"user:email"},
-			AuthURL:     "https://github.com/login/oauth/authorize",
-			TokenURL:    "https://github.com/login/oauth/access_token",
-			UserInfoURL: "https://api.github.com/user",
-			Configured:  h.socialAuthService.IsProviderConfigured("github"),
-		},
-		{
-			ID:          "facebook",
-			Name:        "Facebook",
-			Enabled:     h.socialAuthService.IsProviderEnabled("facebook"),
-			ClientID:    h.socialAuthService.GetProviderClientID("facebook"),
-			RedirectURL: "http://localhost:8080/auth/facebook/callback",
-			Scopes:      []string{"email", "public_profile"},
-			AuthURL:     "https://www.facebook.com/v18.0/dialog/oauth",
-			TokenURL:    "https://graph.facebook.com/v18.0/oauth/access_token",
-			UserInfoURL: "https://graph.facebook.com/v18.0/me",
-			Configured:  h.socialAuthService.IsProviderConfigured("facebook"),
-		},
-		{
-			ID:          "apple",
-			Name:        "Apple",
-			Enabled:     h.socialAuthService.IsProviderEnabled("apple"),
-			ClientID:    h.socialAuthService.GetProviderClientID("apple"),
-			RedirectURL: "http://localhost:8080/auth/apple/callback",
-			Scopes:      []string{"name", "email"},
-			AuthURL:     "https://appleid.apple.com/auth/authorize",
-			TokenURL:    "https://appleid.apple.com/auth/token",
-			UserInfoURL: "",
-			Configured:  h.socialAuthService.IsProviderConfigured("apple"),
-		},
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
+	// Get providers from database for this tenant
+	providers, err := h.socialProviderService.GetAllProviders(tenantID)
+	if err != nil {
+		http.Error(w, "Failed to get providers", http.StatusInternalServerError)
+		return
+	}
+
+	configs := []ProviderConfig{}
+	for _, provider := range providers {
+		config := ProviderConfig{
+			ID:          provider.Name,
+			Name:        provider.DisplayName,
+			Enabled:     provider.Enabled,
+			ClientID:    provider.ClientID,
+			RedirectURL: provider.RedirectURL,
+			Scopes:      provider.Scopes,
+			AuthURL:     provider.AuthURL,
+			TokenURL:    provider.TokenURL,
+			UserInfoURL: provider.UserInfoURL,
+			Configured:  provider.ClientID != "" && provider.ClientSecret != "",
+		}
+		configs = append(configs, config)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -407,6 +385,7 @@ func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	provider := vars["provider"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	var req UpdateProviderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -414,8 +393,8 @@ func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Get the existing provider from database
-	existingProvider, err := h.socialProviderService.GetProviderByName(provider)
+	// Get the existing provider from database for this tenant
+	existingProvider, err := h.socialProviderService.GetProviderByName(provider, tenantID)
 	if err != nil {
 		http.Error(w, "Provider not found", http.StatusNotFound)
 		return
@@ -432,7 +411,7 @@ func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.
 	}
 
 	// Save to database
-	err = h.socialProviderService.UpdateProvider(existingProvider.ID.Hex(), existingProvider)
+	err = h.socialProviderService.UpdateProvider(existingProvider.ID.Hex(), tenantID, existingProvider)
 	if err != nil {
 		http.Error(w, "Failed to update provider configuration: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -457,9 +436,10 @@ func (h *SocialAuthHandler) TestProviderConfig(w http.ResponseWriter, r *http.Re
 
 	vars := mux.Vars(r)
 	provider := vars["provider"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	// Basic validation
-	isConfigured := h.socialAuthService.IsProviderConfigured(provider)
+	isConfigured := h.socialAuthService.IsProviderConfigured(provider, tenantID)
 	
 	response := map[string]interface{}{
 		"success":    isConfigured,

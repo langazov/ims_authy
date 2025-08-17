@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
 )
@@ -34,7 +35,9 @@ type UpdateScopeRequest struct {
 }
 
 func (h *ScopeHandler) GetAllScopes(w http.ResponseWriter, r *http.Request) {
-	scopes, err := h.scopeService.GetAllScopes()
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
+	scopes, err := h.scopeService.GetAllScopes(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to fetch scopes", http.StatusInternalServerError)
 		return
@@ -49,6 +52,8 @@ func (h *ScopeHandler) GetAllScopes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScopeHandler) CreateScope(w http.ResponseWriter, r *http.Request) {
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
 	var req CreateScopeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -61,6 +66,7 @@ func (h *ScopeHandler) CreateScope(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 		Category:    req.Category,
 		Active:      req.Active,
+		TenantID:    tenantID,
 	}
 
 	if err := h.scopeService.CreateScope(scope); err != nil {
@@ -85,6 +91,8 @@ func (h *ScopeHandler) UpdateScope(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
 	var req UpdateScopeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -98,7 +106,7 @@ func (h *ScopeHandler) UpdateScope(w http.ResponseWriter, r *http.Request) {
 		Active:      req.Active,
 	}
 
-	if err := h.scopeService.UpdateScope(scopeID, scope); err != nil {
+	if err := h.scopeService.UpdateScope(scopeID, tenantID, scope); err != nil {
 		http.Error(w, "Failed to update scope", http.StatusInternalServerError)
 		return
 	}
@@ -119,7 +127,9 @@ func (h *ScopeHandler) DeleteScope(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.scopeService.DeleteScope(scopeID); err != nil {
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
+	if err := h.scopeService.DeleteScope(scopeID, tenantID); err != nil {
 		http.Error(w, "Failed to delete scope", http.StatusInternalServerError)
 		return
 	}

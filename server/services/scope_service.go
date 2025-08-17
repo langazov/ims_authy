@@ -20,11 +20,16 @@ func NewScopeService(db *mongo.Database) *ScopeService {
 	}
 }
 
-func (s *ScopeService) GetAllScopes() ([]models.Scope, error) {
+func (s *ScopeService) GetAllScopes(tenantID string) ([]models.Scope, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cursor, err := s.collection.Find(ctx, bson.M{"active": true})
+	filter := bson.M{"active": true}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -50,27 +55,32 @@ func (s *ScopeService) CreateScope(scope *models.Scope) error {
 	return err
 }
 
-func (s *ScopeService) UpdateScope(id string, scope *models.Scope) error {
+func (s *ScopeService) UpdateScope(id, tenantID string, scope *models.Scope) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	objectID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return err
+	}
+
+	filter := bson.M{"_id": objectID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
 	}
 
 	scope.UpdatedAt = time.Now()
 
 	_, err = s.collection.UpdateOne(
 		ctx,
-		bson.M{"_id": objectID},
+		filter,
 		bson.M{"$set": scope},
 	)
 
 	return err
 }
 
-func (s *ScopeService) DeleteScope(id string) error {
+func (s *ScopeService) DeleteScope(id, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -79,21 +89,31 @@ func (s *ScopeService) DeleteScope(id string) error {
 		return err
 	}
 
+	filter := bson.M{"_id": objectID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	_, err = s.collection.UpdateOne(
 		ctx,
-		bson.M{"_id": objectID},
+		filter,
 		bson.M{"$set": bson.M{"active": false, "updated_at": time.Now()}},
 	)
 
 	return err
 }
 
-func (s *ScopeService) GetScopeByName(name string) (*models.Scope, error) {
+func (s *ScopeService) GetScopeByName(name, tenantID string) (*models.Scope, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	filter := bson.M{"name": name, "active": true}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var scope models.Scope
-	err := s.collection.FindOne(ctx, bson.M{"name": name, "active": true}).Decode(&scope)
+	err := s.collection.FindOne(ctx, filter).Decode(&scope)
 	if err != nil {
 		return nil, err
 	}
@@ -101,17 +121,22 @@ func (s *ScopeService) GetScopeByName(name string) (*models.Scope, error) {
 	return &scope, nil
 }
 
-func (s *ScopeService) InitializeDefaultScopes() error {
+func (s *ScopeService) InitializeDefaultScopes(tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Check if any scopes already exist
-	count, err := s.collection.CountDocuments(ctx, bson.M{})
+	// Check if any scopes already exist for this tenant
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+	
+	count, err := s.collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return err
 	}
 
-	// Only initialize if no scopes exist
+	// Only initialize if no scopes exist for this tenant
 	if count > 0 {
 		return nil
 	}
@@ -263,6 +288,7 @@ func (s *ScopeService) InitializeDefaultScopes() error {
 	var docs []any
 	for _, scope := range defaultScopes {
 		scope.ID = primitive.NewObjectID()
+		scope.TenantID = tenantID
 		scope.CreatedAt = now
 		scope.UpdatedAt = now
 		docs = append(docs, scope)
