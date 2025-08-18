@@ -11,6 +11,10 @@ import { Copy, ExternalLink, Settings, Eye, EyeOff, CheckCircle, XCircle, Info }
 import { toast } from 'sonner'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
+import { apiClient } from '@/lib/api'
+import { TenantUrlBuilder } from '@/lib/tenantUrls'
+import { useTenant } from '@/contexts/TenantContext'
+import { config } from '@/lib/config'
 
 interface SocialProvider {
   id: string
@@ -157,11 +161,35 @@ const setupGuides = {
 
 export default function SocialLoginSetup() {
   const { isAdmin } = usePermissions()
+  const { activeTenant } = useTenant()
   const [providers, setProviders] = useState<SocialProvider[]>(defaultProviders)
   const [selectedProvider, setSelectedProvider] = useState<SocialProvider | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [showSecrets, setShowSecrets] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+
+  // Generate tenant-aware callback URLs
+  const getTenantCallbackUrl = (providerId: string): string => {
+    if (activeTenant?.id) {
+      return TenantUrlBuilder.buildTenantSocialCallbackUrl(activeTenant.id, providerId)
+    }
+    return TenantUrlBuilder.buildLegacySocialCallbackUrl(providerId)
+  }
+
+  // Generate dynamic setup instructions with tenant-aware callback URLs
+  const getSetupInstructions = (providerId: string) => {
+    const callbackUrl = getTenantCallbackUrl(providerId)
+    const baseInstructions = setupGuides[providerId as keyof typeof setupGuides]
+    
+    return {
+      ...baseInstructions,
+      steps: baseInstructions.steps.map(step => 
+        step.includes('http://localhost:8080/auth/') 
+          ? step.replace(/http:\/\/localhost:8080\/auth\/\w+\/callback/, callbackUrl)
+          : step
+      )
+    }
+  }
 
   // Check permissions - only admin can manage social login setup
   if (!isAdmin()) {
@@ -174,15 +202,17 @@ export default function SocialLoginSetup() {
     )
   }
 
-  // Fetch provider configurations from backend
+  // Fetch provider configurations from backend (filtered by activeTenantId)
   useEffect(() => {
     const fetchProviders = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/v1/social/providers')
-        if (response.ok) {
-          const backendProviders = await response.json()
-          setProviders(backendProviders)
-        }
+        const backendProviders = await apiClient.socialProviders.getAll()
+        // Update providers with tenant-aware callback URLs
+        const providersWithTenantCallbacks = backendProviders.map((provider: SocialProvider) => ({
+          ...provider,
+          redirectUrl: getTenantCallbackUrl(provider.id)
+        }))
+        setProviders(providersWithTenantCallbacks)
       } catch (error) {
         console.error('Failed to fetch provider configurations:', error)
         toast.error('Failed to load provider configurations')
@@ -192,7 +222,7 @@ export default function SocialLoginSetup() {
     }
 
     fetchProviders()
-  }, [])
+  }, [activeTenant?.id])
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -213,30 +243,26 @@ export default function SocialLoginSetup() {
 
   const handleProviderUpdate = async (updatedProvider: SocialProvider) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/social/providers/${updatedProvider.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          enabled: updatedProvider.enabled,
-          clientId: updatedProvider.clientId,
-          clientSecret: updatedProvider.clientSecret,
-          redirectUrl: updatedProvider.redirectUrl,
-        }),
+      // Ensure we're using the tenant-aware callback URL
+      const tenantCallbackUrl = getTenantCallbackUrl(updatedProvider.id)
+      await apiClient.socialProviders.update(updatedProvider.id, {
+        enabled: updatedProvider.enabled,
+        clientId: updatedProvider.clientId,
+        clientSecret: updatedProvider.clientSecret,
+        redirectUrl: tenantCallbackUrl,
       })
 
-      if (response.ok) {
-        setProviders(prev => prev.map(p => 
-          p.id === updatedProvider.id 
-            ? { ...updatedProvider, configured: !!(updatedProvider.clientId && updatedProvider.clientSecret) }
-            : p
-        ))
-        setIsDialogOpen(false)
-        toast.success(`${updatedProvider.name} configuration updated`)
-      } else {
-        toast.error('Failed to update provider configuration')
-      }
+      setProviders(prev => prev.map(p => 
+        p.id === updatedProvider.id 
+          ? { 
+              ...updatedProvider, 
+              redirectUrl: tenantCallbackUrl,
+              configured: !!(updatedProvider.clientId && updatedProvider.clientSecret) 
+            }
+          : p
+      ))
+      setIsDialogOpen(false)
+      toast.success(`${updatedProvider.name} configuration updated`)
     } catch (error) {
       console.error('Failed to update provider:', error)
       toast.error('Failed to update provider configuration')
@@ -251,11 +277,7 @@ export default function SocialLoginSetup() {
 
   const testProviderConfig = async (providerId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/social/providers/${providerId}/test`, {
-        method: 'POST',
-      })
-      
-      const result = await response.json()
+      const result = await apiClient.socialProviders.test(providerId)
       
       if (result.success) {
         toast.success(`${providerId} configuration is valid`)
@@ -482,6 +504,33 @@ export default function SocialLoginSetup() {
                     <Copy size={12} />
                   </Button>
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Login Initiation URL</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <code className="text-xs bg-muted px-2 py-1 rounded flex-1">
+                    {activeTenant?.id 
+                      ? `${TenantUrlBuilder.buildTenantUrl(activeTenant.id, `/auth/${provider.id}/login`)}`
+                      : `${config.apiBaseUrl}/auth/${provider.id}/login`
+                    }
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(
+                      activeTenant?.id 
+                        ? `${TenantUrlBuilder.buildTenantUrl(activeTenant.id, `/auth/${provider.id}/login`)}`
+                        : `${config.apiBaseUrl}/auth/${provider.id}/login`,
+                      'Login Initiation URL'
+                    )}
+                  >
+                    <Copy size={12} />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use this URL to initiate social login for this tenant
+                </p>
               </div>
 
               <div className="pt-2 border-t">
