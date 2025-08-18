@@ -22,8 +22,15 @@ frontend:
 ingress:
   enabled: true
   className: "nginx"
+  ingressClassName: nginx
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/cors-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization
+    nginx.ingress.kubernetes.io/cors-allow-methods: POST, GET, OPTIONS
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-expose-headers: X-Custom-Header
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-production
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
   hosts:    
