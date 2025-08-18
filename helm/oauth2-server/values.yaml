@@ -7,7 +7,7 @@ global:
 # Image configuration
 image:
   registry: docker.io
-  repository: oauth2-server
+  repository: ims_authy-backend
   tag: "latest"
   pullPolicy: IfNotPresent
   pullSecrets: []
@@ -20,7 +20,7 @@ frontendReplicaCount: 1
 frontend:
   image:
     registry: docker.io
-    repository: oauth2-frontend
+    repository: ims_authy-frontend
     tag: "latest"
     pullPolicy: IfNotPresent
   service:

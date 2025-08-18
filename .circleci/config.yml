@@ -70,15 +70,21 @@ jobs:
       - attach_workspace:
           at: ~/repo
       - run:
+          name: "Set commit sha as variable"
+          command: echo "export COMMIT_SHA=${CIRCLE_SHA1:0:7}" >> "$BASH_ENV"
+      - run:
           name: Docker login
           command: |
             echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
       - run:
           name: Set image names and tags
           command: |
-            export IMAGE_TAG=${CIRCLE_SHA1}
+            export IMAGE_TAG=${COMMIT_SHA}
             export FRONTEND_REPO=${DOCKERHUB_REPO_FRONTEND:-"ims_authy-frontend"}
             export BACKEND_REPO=${DOCKERHUB_REPO_BACKEND:-"ims_authy-backend"}
+            echo "export IMAGE_TAG=${COMMIT_SHA}" >> $BASH_ENV
+            echo "export FRONTEND_REPO=${FRONTEND_REPO}" >> $BASH_ENV
+            echo "export BACKEND_REPO=${BACKEND_REPO}" >> $BASH_ENV
             echo "Frontend repo: $DOCKERHUB_USERNAME/$FRONTEND_REPO" > /tmp/image_info
             echo "Backend repo: $DOCKERHUB_USERNAME/$BACKEND_REPO" >> /tmp/image_info
             cat /tmp/image_info
@@ -86,21 +92,21 @@ jobs:
           name: Build frontend Docker image
           command: |
             # build using the frontend Dockerfile; frontend/dist was persisted from frontend-build
-            docker build -t $DOCKERHUB_USERNAME/$FRONTEND_REPO:${CIRCLE_SHA1} -t $DOCKERHUB_USERNAME/$FRONTEND_REPO:latest -f frontend/Dockerfile frontend
+            docker build -t $DOCKERHUB_USERNAME/${FRONTEND_REPO}:${COMMIT_SHA} -t $DOCKERHUB_USERNAME/${FRONTEND_REPO}:latest -f frontend/Dockerfile frontend
       - run:
           name: Build backend Docker image
           command: |
-            docker build -t $DOCKERHUB_USERNAME/$BACKEND_REPO:${CIRCLE_SHA1} -t $DOCKERHUB_USERNAME/$BACKEND_REPO:latest -f server/Dockerfile server
+            docker build -t $DOCKERHUB_USERNAME/${BACKEND_REPO}:${COMMIT_SHA} -t $DOCKERHUB_USERNAME/${BACKEND_REPO}:latest -f server/Dockerfile server
       - run:
           name: Push frontend image
           command: |
-            docker push $DOCKERHUB_USERNAME/$FRONTEND_REPO:${CIRCLE_SHA1}
-            docker push $DOCKERHUB_USERNAME/$FRONTEND_REPO:latest
+            docker push $DOCKERHUB_USERNAME/${FRONTEND_REPO}:${COMMIT_SHA}
+            docker push $DOCKERHUB_USERNAME/${FRONTEND_REPO}:latest
       - run:
           name: Push backend image
           command: |
-            docker push $DOCKERHUB_USERNAME/$BACKEND_REPO:${CIRCLE_SHA1}
-            docker push $DOCKERHUB_USERNAME/$BACKEND_REPO:latest
+            docker push $DOCKERHUB_USERNAME/${BACKEND_REPO}:${COMMIT_SHA}
+            docker push $DOCKERHUB_USERNAME/${BACKEND_REPO}:latest
   deploy-helm:
     docker:
       - image: cimg/base:stable
@@ -130,14 +136,14 @@ jobs:
           name: Deploy Helm chart
           command: |
             set -e
-            IMAGE_TAG=${CIRCLE_SHA1}
+            IMAGE_TAG=${COMMIT_SHA}
             FRONTEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_FRONTEND:-ims_authy-frontend}
             BACKEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_BACKEND:-ims_authy-backend}
             echo "Deploying with images: $FRONTEND_IMAGE:$IMAGE_TAG and $BACKEND_IMAGE:$IMAGE_TAG"
-            helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/ims_authy} \
+            helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/oauth2-server} \
               --namespace ${KUBE_NAMESPACE:-default} --create-namespace \
               --set frontend.image.repository=$FRONTEND_IMAGE --set frontend.image.tag=$IMAGE_TAG \
-              --set backend.image.repository=$BACKEND_IMAGE --set backend.image.tag=$IMAGE_TAG
+              --set image.repository=$BACKEND_IMAGE --set image.tag=$IMAGE_TAG
 
 
 workflows:
@@ -145,16 +151,15 @@ workflows:
   build_and_publish:
     jobs:
       - frontend-build
-      - backend-build:
-          requires:
-            - frontend-build
+      - backend-build
       - docker-build-and-push:
           requires:
             - frontend-build
             - backend-build
       - hold:
+          requires:
+            - docker-build-and-push
           type: approval
       - deploy-helm:
           requires:
-            - docker-build-and-push
             - hold
