@@ -144,10 +144,14 @@ jobs:
             echo "Using IMAGE_TAG: $IMAGE_TAG for environment: $ENVIRONMENT"
             
             # Use envsubst to replace IMAGE_TAG in the appropriate values file
+            # ensure envsubst is available (provides envsubst from gettext)
+            sudo apt-get update -y
+            sudo apt-get install -y gettext-base
+
             if [ "$ENVIRONMENT" = "production" ]; then
-              circleci env subst < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
+              envsubst '$IMAGE_TAG' < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
             else
-              circleci env subst < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
+              envsubst '$IMAGE_TAG' < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
             fi
             
             echo "Processed values file:"
@@ -162,6 +166,7 @@ jobs:
             helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/oauth2-server} \
               --namespace ${KUBE_NAMESPACE:-ims-authy} \
               --values /tmp/values-processed.yaml \
+              --set image.tag=${IMAGE_TAG} \
 
 
 
