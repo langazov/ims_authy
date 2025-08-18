@@ -41,7 +41,7 @@ frontend:
 
 # Service account
 serviceAccount:
-  create: true
+  create: false
   annotations: {}
   name: ""
 
