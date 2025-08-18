@@ -17,6 +17,21 @@ frontend:
     repository: ims_authy-frontend
     tag: "${IMAGE_TAG}"
     pullPolicy: IfNotPresent
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - host: ${FRONTEND_HOST}
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: oauth2-frontend-tls
+        hosts:
+          - ${FRONTEND_HOST}
 
 # Ingress configuration with TLS
 ingress:
@@ -29,15 +44,12 @@ ingress:
     nginx.ingress.kubernetes.io/cors-expose-headers: X-Custom-Header
     nginx.ingress.kubernetes.io/cors-max-age: "86400"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-production
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     acme.cert-manager.io/http01-edit-in-place: "true"
-  hosts:    
-    - host: ${FRONTEND_HOST}
-      paths:
-        - path: /
-          pathType: Prefix
+  # Backend (oauth2 server) ingress - keep this ingress bound to the backend host only
+  hosts:
     - host: ${BACKEND_HOST}
       paths:
         - path: /
@@ -46,7 +58,8 @@ ingress:
     - secretName: oauth2-server-tls
       hosts:
         - ${BACKEND_HOST}
-        - ${FRONTEND_HOST}
+
+# Frontend ingress is configured under the top-level `frontend.ingress` key above.
 
 
 # Production resource configuration
