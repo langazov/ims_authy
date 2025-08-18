@@ -14,18 +14,12 @@ export default function LoginPage() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null)
 
   const handleSocialLogin = (provider: 'google' | 'github' | 'facebook' | 'apple') => {
-    // Store selected tenant for the auth flow
-    if (selectedTenant) {
-      localStorage.setItem('activeTenantId', selectedTenant.id || '')
-    }
-    loginWithSocial(provider)
+    // Use selected tenant ID if available, otherwise default tenant fallback
+    loginWithSocial(provider, selectedTenant?.id)
   }
 
   const handleOAuthLogin = () => {
-    // Store selected tenant for the auth flow
-    if (selectedTenant) {
-      localStorage.setItem('activeTenantId', selectedTenant.id || '')
-    }
+    // No longer storing activeTenantId - using default tenant fallback
     login()
   }
 

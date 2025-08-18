@@ -29,10 +29,24 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setError(null);
       const tenants = await tenantService.getAllTenants();
       setAvailableTenants(tenants);
-      
-      // If no active tenant is set and there are tenants available, set the first one
-      if (!activeTenant && tenants.length > 0) {
-        setActiveTenant(tenants[0]);
+      // Try to restore active tenant from localStorage
+      const storedActiveTenantId = localStorage.getItem('activeTenantId');
+      if (storedActiveTenantId) {
+        const matched = tenants.find((t) => t.id === storedActiveTenantId);
+        if (matched) {
+          setActiveTenant(matched);
+        } else {
+          // Stored id not found in the current list; clear it and fallback
+          localStorage.removeItem('activeTenantId');
+          if (!activeTenant && tenants.length > 0) {
+            setActiveTenant(tenants[0]);
+          }
+        }
+      } else {
+        // If no active tenant is set and there are tenants available, set the first one
+        if (!activeTenant && tenants.length > 0) {
+          setActiveTenant(tenants[0]);
+        }
       }
     } catch (err) {
       console.error('Failed to refresh tenants:', err);
@@ -52,7 +66,11 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       // Store active tenant ID for API requests
       localStorage.setItem('activeTenantId', activeTenant.id || '');
     } else {
-      localStorage.removeItem('activeTenantId');
+      // Don't remove the stored tenant during initial loading (avoids race with refreshTenants)
+      // Only remove when we're not loading tenants (e.g. explicit clear/logout)
+      if (!loading) {
+        localStorage.removeItem('activeTenantId');
+      }
     }
   }, [activeTenant]);
 

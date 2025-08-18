@@ -69,7 +69,7 @@ func main() {
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
-	tenantHandler := handlers.NewTenantHandler(tenantService)
+	tenantHandler := handlers.NewTenantHandler(tenantService, socialProviderService)
 	userHandler := handlers.NewUserHandler(userService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
@@ -83,7 +83,7 @@ func main() {
 	// Apply tenant middleware to all API routes
 	api := router.PathPrefix("/api/v1").Subrouter()
 	api.Use(middleware.TenantMiddleware(tenantService))
-	
+
 	// Tenant management endpoints (super admin only in production)
 	api.HandleFunc("/tenants", tenantHandler.CreateTenant).Methods("POST")
 	api.HandleFunc("/tenants", tenantHandler.GetTenants).Methods("GET")
@@ -147,11 +147,11 @@ func main() {
 	tenantOAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
-			"message": "OAuth2 Authorization Server",
+			"message":   "OAuth2 Authorization Server",
 			"tenant_id": middleware.GetTenantIDFromRequest(r),
 			"endpoints": map[string]string{
 				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
-				"token_endpoint": r.Host + r.RequestURI + "/token",
+				"token_endpoint":         r.Host + r.RequestURI + "/token",
 			},
 		}
 		json.NewEncoder(w).Encode(response)
@@ -164,7 +164,7 @@ func main() {
 	tenantAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
-			"message": "Social Authentication Service",
+			"message":   "Social Authentication Service",
 			"tenant_id": middleware.GetTenantIDFromRequest(r),
 			"endpoints": map[string]string{
 				"providers_endpoint": r.Host + r.RequestURI + "/providers",
@@ -190,11 +190,11 @@ func main() {
 	oauth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
-			"message": "OAuth2 Authorization Server",
+			"message":   "OAuth2 Authorization Server",
 			"tenant_id": middleware.GetTenantIDFromRequest(r),
 			"endpoints": map[string]string{
 				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
-				"token_endpoint": r.Host + r.RequestURI + "/token",
+				"token_endpoint":         r.Host + r.RequestURI + "/token",
 			},
 		}
 		json.NewEncoder(w).Encode(response)
@@ -208,7 +208,7 @@ func main() {
 	auth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
-			"message": "Social Authentication Service",
+			"message":   "Social Authentication Service",
 			"tenant_id": middleware.GetTenantIDFromRequest(r),
 			"endpoints": map[string]string{
 				"providers_endpoint": r.Host + r.RequestURI + "/providers",

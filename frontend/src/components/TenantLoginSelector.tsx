@@ -29,9 +29,10 @@ export const TenantLoginSelector: React.FC<TenantLoginSelectorProps> = ({
       setError(null);
       const tenantsData = await tenantService.getAllTenants();
       setTenants(tenantsData);
-      
-      // Auto-select first tenant if none selected
+      // No longer using activeTenantId - tenant selection is optional for login
+      // Users can login without selecting a specific tenant (will use default tenant)
       if (!selectedTenant && tenantsData.length > 0) {
+        // Optionally select first tenant for UI convenience, but login will work without it
         onTenantSelect(tenantsData[0]);
       }
     } catch (err) {

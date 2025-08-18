@@ -7,7 +7,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   login: () => void
   directLogin: (email: string, password: string, twoFACode?: string) => Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }>
-  loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple') => void
+  loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple', tenantId?: string) => void
   logout: () => void
   handleCallback: (code: string, state: string) => Promise<void>
   refreshUser: () => Promise<void>
@@ -59,9 +59,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return result
   }
 
-  const loginWithSocial = (provider: 'google' | 'github' | 'facebook' | 'apple') => {
-    console.info('[AuthContext] social login requested', { provider })
-    authService.startSocialLogin(provider)
+  const loginWithSocial = (provider: 'google' | 'github' | 'facebook' | 'apple', tenantId?: string) => {
+    console.info('[AuthContext] social login requested', { provider, tenantId })
+    authService.startSocialLogin(provider, tenantId)
   }
 
   const logout = () => {

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -61,7 +62,7 @@ func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.R
 
 	// Generate a random state parameter for security
 	state := h.generateState()
-	
+
 	// Store state in session/cookie for validation (simplified approach)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state_" + provider,
@@ -138,7 +139,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 
 	// Get OAuth parameters from cookie (stored during OAuth initiation)
 	var originalState, clientID, redirectURI, scope, codeChallenge, codeChallengeMethod string
-	
+
 	if paramsCookie, err := r.Cookie("oauth_params_" + provider); err == nil {
 		// Decode the OAuth parameters from cookie
 		paramsJSON, err := base64.URLEncoding.DecodeString(paramsCookie.Value)
@@ -153,7 +154,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 				codeChallengeMethod = params["code_challenge_method"]
 			}
 		}
-		
+
 		// Clear the OAuth params cookie
 		http.SetCookie(w, &http.Cookie{
 			Name:   "oauth_params_" + provider,
@@ -203,20 +204,31 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Direct social login without OAuth flow - return user info
-	response := map[string]interface{}{
-		"message":    "Social login successful",
-		"provider":   provider,
-		"user_id":    user.ID.Hex(),
-		"email":      user.Email,
-		"first_name": user.FirstName,
-		"last_name":  user.LastName,
-		"groups":     user.Groups,
-		"scopes":     user.Scopes,
+	// Direct social login without OAuth flow - create temporary auth code for frontend
+	// Generate a temporary authorization code that the frontend can exchange for tokens
+	tempClientID := "direct-social-login"
+	tempRedirectURI := "http://localhost/login" // Frontend login page
+	tempScopes := []string{"read", "openid", "profile", "email"}
+
+	authCode, err := h.oauthService.CreateAuthorizationCode(
+		tempClientID,
+		user.ID.Hex(),
+		tenantID,
+		tempRedirectURI,
+		tempScopes,
+		"", // no code challenge for direct login
+		"",
+	)
+	if err != nil {
+		http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	// Redirect to frontend with the authorization code
+	redirectURL := fmt.Sprintf("http://localhost:3000/login?code=%s&provider=%s&tenant_id=%s",
+		authCode, provider, tenantID)
+
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // SocialOAuthAuthorize integrates social login with OAuth flow
@@ -247,12 +259,12 @@ func (h *SocialAuthHandler) SocialOAuthAuthorize(w http.ResponseWriter, r *http.
 
 	// Store OAuth parameters and state in cookie for callback
 	params := map[string]string{
-		"original_state":         state,
-		"client_id":              clientID,
-		"redirect_uri":           redirectURI,
-		"scope":                  scope,
-		"code_challenge":         codeChallenge,
-		"code_challenge_method":  codeChallengeMethod,
+		"original_state":        state,
+		"client_id":             clientID,
+		"redirect_uri":          redirectURI,
+		"scope":                 scope,
+		"code_challenge":        codeChallenge,
+		"code_challenge_method": codeChallengeMethod,
 	}
 
 	paramsJSON, _ := json.Marshal(params)
@@ -298,23 +310,23 @@ func parseScopes(scopeStr string) []string {
 	if scopeStr == "" {
 		return []string{}
 	}
-	
+
 	scopes := []string{}
 	for _, scope := range []string{"read", "write", "admin", "openid", "profile", "email"} {
 		if contains(scopeStr, scope) {
 			scopes = append(scopes, scope)
 		}
 	}
-	
+
 	return scopes
 }
 
 // Helper function to check if string contains substring
 func contains(str, substr string) bool {
-	return len(str) >= len(substr) && (str == substr || 
-		(len(str) > len(substr) && (str[:len(substr)+1] == substr+" " || 
-		str[len(str)-len(substr)-1:] == " "+substr || 
-		len(str) > len(substr)*2 && str[len(str)-len(substr):] == substr)))
+	return len(str) >= len(substr) && (str == substr ||
+		(len(str) > len(substr) && (str[:len(substr)+1] == substr+" " ||
+			str[len(str)-len(substr)-1:] == " "+substr ||
+			len(str) > len(substr)*2 && str[len(str)-len(substr):] == substr)))
 }
 
 // Provider configuration management structures
@@ -333,10 +345,10 @@ type ProviderConfig struct {
 }
 
 type UpdateProviderRequest struct {
-	Enabled      bool     `json:"enabled"`
-	ClientID     string   `json:"clientId"`
-	ClientSecret string   `json:"clientSecret"`
-	RedirectURL  string   `json:"redirectUrl"`
+	Enabled      bool   `json:"enabled"`
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+	RedirectURL  string `json:"redirectUrl"`
 }
 
 // GetProviderConfigs returns the configuration of all social providers
@@ -418,8 +430,8 @@ func (h *SocialAuthHandler) UpdateProviderConfig(w http.ResponseWriter, r *http.
 	}
 
 	response := map[string]interface{}{
-		"success": true,
-		"message": "Provider configuration updated successfully",
+		"success":  true,
+		"message":  "Provider configuration updated successfully",
 		"provider": provider,
 	}
 
@@ -440,7 +452,7 @@ func (h *SocialAuthHandler) TestProviderConfig(w http.ResponseWriter, r *http.Re
 
 	// Basic validation
 	isConfigured := h.socialAuthService.IsProviderConfigured(provider, tenantID)
-	
+
 	response := map[string]interface{}{
 		"success":    isConfigured,
 		"configured": isConfigured,

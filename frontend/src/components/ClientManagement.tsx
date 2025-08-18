@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import ClientForm from './ClientForm'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
+import { apiClient } from '@/lib/api'
 
 interface OAuthClient {
   id: string
@@ -60,17 +61,12 @@ export default function ClientManagement() {
 
   const safeClients = clients || []
 
-  // Fetch clients from backend
+  // Fetch clients from backend (filtered by activeTenantId)
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/v1/clients')
-        if (response.ok) {
-          const fetchedClients = await response.json()
-          setClients(fetchedClients)
-        } else {
-          console.error('Failed to fetch clients:', response.statusText)
-        }
+        const fetchedClients = await apiClient.clients.getAll()
+        setClients(fetchedClients)
       } catch (error) {
         console.error('Error fetching clients:', error)
       } finally {
@@ -90,33 +86,20 @@ export default function ClientManagement() {
 
   const handleCreateClient = async (clientData: ClientFormData) => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/clients', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(clientData),
-      })
-      
-      if (response.ok) {
-        const newClient = await response.json()
-        // Add the client secret to the client object for display
-        const clientWithSecret = {
-          ...newClient,
-          clientSecret: newClient.client_secret
-        }
-        setClients(prev => [...prev, clientWithSecret])
-        setIsDialogOpen(false)
-        setSelectedClient(null)
-        
-        // Make the secret visible immediately and show important notice
-        setVisibleSecrets(prev => new Set([...prev, newClient.id]))
-        setNewlyCreatedClient(clientWithSecret)
-        toast.success('OAuth client created successfully - make sure to copy the client secret!')
-      } else {
-        const errorData = await response.text()
-        toast.error(`Failed to create client: ${errorData}`)
+      const newClient = await apiClient.clients.create(clientData)
+      // Add the client secret to the client object for display
+      const clientWithSecret = {
+        ...newClient,
+        clientSecret: newClient.client_secret
       }
+      setClients(prev => [...prev, clientWithSecret])
+      setIsDialogOpen(false)
+      setSelectedClient(null)
+      
+      // Make the secret visible immediately and show important notice
+      setVisibleSecrets(prev => new Set([...prev, newClient.id]))
+      setNewlyCreatedClient(clientWithSecret)
+      toast.success('OAuth client created successfully - make sure to copy the client secret!')
     } catch (error) {
       console.error('Error creating client:', error)
       toast.error('Failed to create client')
@@ -127,26 +110,13 @@ export default function ClientManagement() {
     if (!selectedClient) return
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/clients/${selectedClient.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(clientData),
-      })
-      
-      if (response.ok) {
-        const updatedClient = await response.json()
-        setClients(prev => prev.map(client => 
-          client.id === selectedClient.id ? updatedClient : client
-        ))
-        setIsDialogOpen(false)
-        setSelectedClient(null)
-        toast.success('OAuth client updated successfully')
-      } else {
-        const errorData = await response.text()
-        toast.error(`Failed to update client: ${errorData}`)
-      }
+      const updatedClient = await apiClient.clients.update(selectedClient.id, clientData)
+      setClients(prev => prev.map(client => 
+        client.id === selectedClient.id ? updatedClient : client
+      ))
+      setIsDialogOpen(false)
+      setSelectedClient(null)
+      toast.success('OAuth client updated successfully')
     } catch (error) {
       console.error('Error updating client:', error)
       toast.error('Failed to update client')
@@ -159,17 +129,9 @@ export default function ClientManagement() {
     }
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/clients/${clientId}`, {
-        method: 'DELETE',
-      })
-      
-      if (response.ok) {
-        setClients(prev => prev.filter(client => client.id !== clientId))
-        toast.success('OAuth client deleted successfully')
-      } else {
-        const errorData = await response.text()
-        toast.error(`Failed to delete client: ${errorData}`)
-      }
+      await apiClient.clients.delete(clientId)
+      setClients(prev => prev.filter(client => client.id !== clientId))
+      toast.success('OAuth client deleted successfully')
     } catch (error) {
       console.error('Error deleting client:', error)
       toast.error('Failed to delete client')
@@ -182,30 +144,21 @@ export default function ClientManagement() {
     }
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/clients/${clientId}/regenerate-secret`, {
-        method: 'POST',
-      })
+      const result = await apiClient.clients.regenerateSecret(clientId)
+      // Update the client with new secret in state
+      setClients(prev => prev.map(client => 
+        client.id === clientId 
+          ? { ...client, clientSecret: result.client_secret }
+          : client
+      ))
+      // Show the secret and make it visible
+      setVisibleSecrets(prev => new Set([...prev, clientId]))
+      toast.success('Client secret regenerated successfully')
       
-      if (response.ok) {
-        const result = await response.json()
-        // Update the client with new secret in state
-        setClients(prev => prev.map(client => 
-          client.id === clientId 
-            ? { ...client, clientSecret: result.client_secret }
-            : client
-        ))
-        // Show the secret and make it visible
-        setVisibleSecrets(prev => new Set([...prev, clientId]))
-        toast.success('Client secret regenerated successfully')
-        
-        // Show warning about copying the secret
-        setTimeout(() => {
-          toast.warning('Make sure to copy the new client secret - it won\'t be shown again!')
-        }, 1000)
-      } else {
-        const errorData = await response.text()
-        toast.error(`Failed to regenerate secret: ${errorData}`)
-      }
+      // Show warning about copying the secret
+      setTimeout(() => {
+        toast.warning('Make sure to copy the new client secret - it won\'t be shown again!')
+      }, 1000)
     } catch (error) {
       console.error('Error regenerating secret:', error)
       toast.error('Failed to regenerate client secret')

@@ -37,4 +37,22 @@ export class TenantUrlBuilder {
   static buildLegacyDirectLoginUrl(): string {
     return `${config.apiBaseUrl}/login`;
   }
+
+  // Tenant-aware callback URLs
+  static buildTenantSocialCallbackUrl(tenantId: string, provider: string): string {
+    return this.buildTenantUrl(tenantId, `/auth/${provider}/callback`);
+  }
+
+  static buildTenantOAuthCallbackUrl(tenantId: string): string {
+    return this.buildTenantUrl(tenantId, '/oauth/callback');
+  }
+
+  // Legacy callback URLs (for default tenant fallback)
+  static buildLegacySocialCallbackUrl(provider: string): string {
+    return `${config.apiBaseUrl}/auth/${provider}/callback`;
+  }
+
+  static buildLegacyOAuthCallbackUrl(): string {
+    return `${config.apiBaseUrl}/callback`;
+  }
 }

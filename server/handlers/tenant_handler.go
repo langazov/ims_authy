@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"oauth2-openid-server/models"
@@ -11,26 +12,28 @@ import (
 )
 
 type TenantHandler struct {
-	tenantService *services.TenantService
+	tenantService         *services.TenantService
+	socialProviderService *services.SocialProviderService
 }
 
 type CreateTenantRequest struct {
-	Name      string                   `json:"name"`
-	Domain    string                   `json:"domain"`
-	Subdomain string                   `json:"subdomain"`
-	Settings  models.TenantSettings    `json:"settings"`
+	Name      string                `json:"name"`
+	Domain    string                `json:"domain"`
+	Subdomain string                `json:"subdomain"`
+	Settings  models.TenantSettings `json:"settings"`
 }
 
 type UpdateTenantRequest struct {
-	Name      string                   `json:"name"`
-	Domain    string                   `json:"domain"`
-	Subdomain string                   `json:"subdomain"`
-	Settings  models.TenantSettings    `json:"settings"`
+	Name      string                `json:"name"`
+	Domain    string                `json:"domain"`
+	Subdomain string                `json:"subdomain"`
+	Settings  models.TenantSettings `json:"settings"`
 }
 
-func NewTenantHandler(tenantService *services.TenantService) *TenantHandler {
+func NewTenantHandler(tenantService *services.TenantService, socialProviderService *services.SocialProviderService) *TenantHandler {
 	return &TenantHandler{
-		tenantService: tenantService,
+		tenantService:         tenantService,
+		socialProviderService: socialProviderService,
 	}
 }
 
@@ -70,6 +73,14 @@ func (h *TenantHandler) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	if err := h.tenantService.CreateTenant(tenant); err != nil {
 		http.Error(w, "Failed to create tenant: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Initialize default social providers for this tenant (best-effort)
+	if h.socialProviderService != nil {
+		if err := h.socialProviderService.InitializeDefaultProviders(tenant.ID.Hex()); err != nil {
+			// Log but don't fail the request
+			log.Printf("Warning: Failed to initialize default social providers for tenant %s: %v", tenant.ID.Hex(), err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

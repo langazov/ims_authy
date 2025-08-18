@@ -23,9 +23,7 @@ class AuthService {
   private readonly STORAGE_KEY = 'auth_tokens'
   private readonly CODE_VERIFIER_KEY = 'code_verifier'
 
-  private getActiveTenantId(): string | null {
-    return localStorage.getItem('activeTenantId')
-  }
+  // Note: getActiveTenantId method removed - no longer using activeTenantId in login flows
 
   generateCodeVerifier(): string {
     const array = new Uint8Array(32)
@@ -67,15 +65,13 @@ class AuthService {
     })
 
     // Use tenant-specific URL if a tenant is selected
-    const activeTenantId = this.getActiveTenantId()
-    const authUrl = activeTenantId 
-      ? TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
-      : TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
+    // Always use legacy OAuth URL (no tenant-specific routing)
+    const authUrl = TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
 
     window.location.href = authUrl
   }
 
-  async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple'): Promise<void> {
+  async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple', tenantId?: string): Promise<void> {
     const codeVerifier = this.generateCodeVerifier()
     const codeChallenge = await this.generateCodeChallenge(codeVerifier)
     const state = crypto.randomUUID()
@@ -83,7 +79,7 @@ class AuthService {
     localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
     localStorage.setItem('oauth_state', state)
 
-    console.info('[auth] startSocialLogin', { provider, clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, state })
+    console.info('[auth] startSocialLogin', { provider, tenantId, clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, state })
 
     const params = new URLSearchParams({
       client_id: config.oauth.clientId,
@@ -93,12 +89,12 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    // Use tenant-specific URL if a tenant is selected
-    const activeTenantId = this.getActiveTenantId()
-    const socialUrl = activeTenantId 
-      ? TenantUrlBuilder.buildSocialLoginUrl(activeTenantId, provider, params)
+    // Use tenant-specific URL if a tenant is provided, otherwise use legacy URL
+    const socialUrl = tenantId 
+      ? TenantUrlBuilder.buildSocialLoginUrl(tenantId, provider, params)
       : TenantUrlBuilder.buildLegacySocialLoginUrl(provider, params)
 
+    console.info('[auth] redirecting to social provider', { socialUrl })
     window.location.href = socialUrl
   }
 
@@ -140,10 +136,8 @@ class AuthService {
     tokenData.append('code_verifier', codeVerifier)
 
     // Use tenant-specific URL if a tenant is selected
-    const activeTenantId = this.getActiveTenantId()
-    const tokenUrl = activeTenantId 
-      ? TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
-      : TenantUrlBuilder.buildLegacyOAuthTokenUrl()
+    // Always use legacy token URL (no tenant-specific routing)
+    const tokenUrl = TenantUrlBuilder.buildLegacyOAuthTokenUrl()
 
     console.debug('[auth] exchanging code for tokens', { tokenUrl })
     const response = await fetch(tokenUrl, {
@@ -259,11 +253,8 @@ class AuthService {
 
   async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
     try {
-      // Use tenant-specific URL if a tenant is selected
-      const activeTenantId = this.getActiveTenantId()
-      const loginUrl = activeTenantId 
-        ? TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
-        : TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      // Always use legacy direct login URL (no tenant-specific routing)
+      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
 
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -331,7 +322,7 @@ class AuthService {
       ...(options.headers as Record<string, string> || {})
     }
 
-    // Add tenant ID header if available
+    // Prioritize activeTenantId for admin operations, fallback to JWT token tenant_id
     const activeTenantId = localStorage.getItem('activeTenantId')
     if (activeTenantId) {
       headers['X-Tenant-ID'] = activeTenantId

@@ -20,6 +20,7 @@ export default function EnhancedLoginPage() {
   const [error, setError] = useState('')
 
   const handleSocialLogin = (provider: 'google' | 'github' | 'facebook' | 'apple') => {
+    // Using default tenant (undefined) - will use legacy OAuth URLs for backwards compatibility
     loginWithSocial(provider)
   }
 

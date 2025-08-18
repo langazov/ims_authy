@@ -6,8 +6,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Shield, QrCode, Copy, Check, AlertTriangle } from 'lucide-react'
-import { config } from '@/lib/config'
 import { useToast } from '@/hooks/use-toast'
+import { apiClient } from '@/lib/api'
 
 interface TwoFactorSetupProps {
   userId: string
@@ -37,19 +37,7 @@ export default function TwoFactorSetup({ userId, onSetupComplete, onCancel }: Tw
     setError('')
     
     try {
-      const response = await fetch(`${config.apiBaseUrl}/api/v1/2fa/setup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user_id: userId }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to setup two-factor authentication')
-      }
-
-      const data: SetupResponse = await response.json()
+      const data: SetupResponse = await apiClient.twoFactor.setup({ user_id: userId })
       setSetupData(data)
       setStep('setup')
     } catch (err) {
@@ -74,21 +62,11 @@ export default function TwoFactorSetup({ userId, onSetupComplete, onCancel }: Tw
     setError('')
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/api/v1/2fa/enable`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          code: verificationCode,
-          secret: setupData.secret,
-        }),
+      await apiClient.twoFactor.enable({
+        user_id: userId,
+        code: verificationCode,
+        secret: setupData.secret,
       })
-
-      if (!response.ok) {
-        throw new Error('Invalid verification code')
-      }
 
       setStep('complete')
       toast({
