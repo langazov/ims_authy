@@ -1,17 +1,21 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterModule } from '@angular/router';
 import { IMSAuthService, User, IMSTwoFactorSetupComponent } from 'ims-auth';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, IMSTwoFactorSetupComponent],
+  imports: [CommonModule, RouterModule, IMSTwoFactorSetupComponent],
   template: `
     <div class="dashboard">
       <header class="dashboard-header">
         <div class="header-content">
           <h1>IMS Dashboard</h1>
+          <nav class="nav-menu">
+            <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+            <a *ngIf="hasProfileAccess()" routerLink="/profile" routerLinkActive="active">Profile</a>
+          </nav>
           <div class="user-info">
             <span>Welcome, {{ user?.email }}</span>
             <button (click)="logout()" class="logout-btn">Logout</button>
@@ -133,12 +137,40 @@ import { IMSAuthService, User, IMSTwoFactorSetupComponent } from 'ims-auth';
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 2rem;
     }
 
     .header-content h1 {
       margin: 0;
       font-size: 1.8rem;
       font-weight: 300;
+      flex-shrink: 0;
+    }
+
+    .nav-menu {
+      display: flex;
+      gap: 1.5rem;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .nav-menu a {
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+
+    .nav-menu a:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .nav-menu a.active {
+      background: rgba(255,255,255,0.2);
+      color: white;
     }
 
     .user-info {
@@ -351,6 +383,11 @@ import { IMSAuthService, User, IMSTwoFactorSetupComponent } from 'ims-auth';
         text-align: center;
       }
 
+      .nav-menu {
+        justify-content: center;
+        gap: 1rem;
+      }
+
       .dashboard-content {
         grid-template-columns: 1fr;
         padding: 1rem;
@@ -405,7 +442,7 @@ export class DashboardComponent implements OnInit {
     this.showTwoFactorSetup = true;
   }
 
-  onTwoFactorComplete(event: any): void {
+  onTwoFactorComplete(_event: any): void {
     this.showTwoFactorSetup = false;
     this.statusMessage = 'Two-factor authentication has been successfully enabled!';
     this.errorMessage = '';
@@ -446,5 +483,9 @@ export class DashboardComponent implements OnInit {
     } else {
       this.errorMessage = 'No authentication token available';
     }
+  }
+
+  hasProfileAccess(): boolean {
+    return this.user?.scopes?.includes('profile') || false;
   }
 }

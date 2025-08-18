@@ -39,6 +39,7 @@ export class IMSAuthGuard implements CanActivate, CanActivateChild {
 
         // Check for required scopes
         const requiredScopes = routeData['scopes'] as string[];
+        console.log('Checking required scopes:', requiredScopes);
         if (requiredScopes && requiredScopes.length > 0) {
           const hasRequiredScope = requiredScopes.some(scope => this.authService.hasScope(scope));
           if (!hasRequiredScope) {
@@ -49,6 +50,7 @@ export class IMSAuthGuard implements CanActivate, CanActivateChild {
 
         // Check for required groups
         const requiredGroups = routeData['groups'] as string[];
+        console.log('Checking required groups:', requiredGroups);
         if (requiredGroups && requiredGroups.length > 0) {
           const hasRequiredGroup = requiredGroups.some(group => this.authService.hasGroup(group));
           if (!hasRequiredGroup) {
