@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { apiClient } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface User {
   id: string
@@ -52,7 +53,8 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
     last_name: user?.last_name || '',
     active: user?.active ?? true,
     groups: Array.isArray(user?.groups) ? user.groups : [],
-    scopes: Array.isArray(user?.scopes) ? user.scopes : ['read', 'openid', 'profile', 'email']
+    scopes: Array.isArray(user?.scopes) ? user.scopes : ['read', 'openid', 'profile', 'email'],
+    password: ''
   })
 
   // Update form data when user prop changes
@@ -65,7 +67,8 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
         last_name: user.last_name || '',
         active: user.active ?? true,
         groups: Array.isArray(user.groups) ? user.groups : [],
-        scopes: Array.isArray(user.scopes) ? user.scopes : []
+        scopes: Array.isArray(user.scopes) ? user.scopes : [],
+        password: ''
       })
     } else {
       // Reset to defaults for new user
@@ -76,10 +79,41 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
         last_name: '',
         active: true,
         groups: [],
-        scopes: ['read', 'openid', 'profile', 'email']
+        scopes: ['read', 'openid', 'profile', 'email'],
+        password: ''
       })
     }
   }, [user])
+
+  const generatePassword = (length = 16) => {
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}<>?'
+    try {
+      const array = new Uint32Array(length)
+      window.crypto.getRandomValues(array)
+      return Array.from(array).map(n => charset[n % charset.length]).join('')
+    } catch (e) {
+      // fallback
+      let out = ''
+      for (let i = 0; i < length; i++) {
+        out += charset[Math.floor(Math.random() * charset.length)]
+      }
+      return out
+    }
+  }
+
+  const copyPassword = async () => {
+    try {
+      if (!formData.password) {
+        toast.error('No password to copy')
+        return
+      }
+      await navigator.clipboard.writeText(formData.password)
+      toast.success('Password copied to clipboard')
+    } catch (err) {
+      console.error('Failed to copy password:', err)
+      toast.error('Failed to copy password')
+    }
+  }
 
   // Fetch available scopes from API
   useEffect(() => {
@@ -120,7 +154,13 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData)
+    // Exclude password when updating existing user (backend may ignore it)
+    if (user) {
+      const { password, ...rest } = formData as any
+      onSubmit(rest)
+    } else {
+      onSubmit(formData as any)
+    }
   }
 
   const handleGroupChange = (groupName: string, checked: boolean) => {
@@ -205,7 +245,7 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="username">Username</Label>
+  <Label htmlFor="username">Username</Label>
         <Input
           id="username"
           value={formData.username}
@@ -223,6 +263,26 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
           onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
           required
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <div className="flex space-x-2">
+          <Input
+            id="password"
+            type="text"
+            value={formData.password}
+            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+            placeholder="Auto-generate a strong password or type your own"
+          />
+          <Button type="button" variant="secondary" onClick={() => setFormData(prev => ({ ...prev, password: generatePassword() }))}>
+            Generate
+          </Button>
+          <Button type="button" variant="outline" onClick={copyPassword}>
+            Copy
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">Leave empty to auto-generate a password on creation.</p>
       </div>
 
       <div className="space-y-2">
