@@ -22,7 +22,6 @@ frontend:
 ingress:
   enabled: true
   className: "nginx"
-  ingressClassName: nginx
   annotations:
     nginx.ingress.kubernetes.io/cors-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization
     nginx.ingress.kubernetes.io/cors-allow-methods: POST, GET, OPTIONS
@@ -33,6 +32,14 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-production
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location ^~ /.well-known/acme-challenge/ {
+        auth_basic off;
+        auth_request off;
+        allow all;
+        root /usr/share/nginx/html;
+        try_files $uri =404;
+      }
   hosts:    
     - host: ${FRONTEND_HOST}
       paths:
