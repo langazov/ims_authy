@@ -6,16 +6,16 @@ frontendReplicaCount: 2
 
 # Production images (update with your registry)
 image:
-  registry: your-registry.com
-  repository: oauth2-server
-  tag: "v1.0.0"
+  registry: docker.io
+  repository: ims_authy-backend
+  tag: "IMAGE_TAG"
   pullPolicy: IfNotPresent
 
 frontend:
   image:
-    registry: your-registry.com
-    repository: oauth2-frontend
-    tag: "v1.0.0"
+    registry: docker.io
+    repository: ims_authy-frontend
+    tag: "IMAGE_TAG"
     pullPolicy: IfNotPresent
 
 # Ingress configuration with TLS

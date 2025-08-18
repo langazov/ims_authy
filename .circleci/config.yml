@@ -133,17 +133,33 @@ jobs:
             chmod 600 ~/.kube/config
             kubectl config current-context || true
       - run:
+          name: Prepare values file with envsubst
+          command: |
+            set -e
+            export IMAGE_TAG=${COMMIT_SHA}
+            export ENVIRONMENT=${DEPLOY_ENVIRONMENT:-development}
+            echo "Using IMAGE_TAG: $IMAGE_TAG for environment: $ENVIRONMENT"
+            
+            # Use envsubst to replace IMAGE_TAG in the appropriate values file
+            if [ "$ENVIRONMENT" = "production" ]; then
+              envsubst < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
+            else
+              envsubst < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
+            fi
+            
+            echo "Processed values file:"
+            cat /tmp/values-processed.yaml
+      - run:
           name: Deploy Helm chart
           command: |
             set -e
-            IMAGE_TAG=${COMMIT_SHA}
-            FRONTEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_FRONTEND:-ims_authy-frontend}
-            BACKEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_BACKEND:-ims_authy-backend}
-            echo "Deploying with images: $FRONTEND_IMAGE:$IMAGE_TAG and $BACKEND_IMAGE:$IMAGE_TAG"
+            export IMAGE_TAG=${COMMIT_SHA}
+            export ENVIRONMENT=${DEPLOY_ENVIRONMENT:-development}
+            
             helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/oauth2-server} \
               --namespace ${KUBE_NAMESPACE:-ims-authy} \
-              --set frontend.image.repository=$FRONTEND_IMAGE --set frontend.image.tag=$IMAGE_TAG \
-              --set image.repository=$BACKEND_IMAGE --set image.tag=$IMAGE_TAG
+              --values /tmp/values-processed.yaml \
+              --create-namespace
 
 
 workflows:

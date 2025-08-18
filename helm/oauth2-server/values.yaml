@@ -151,6 +151,10 @@ config:
   # Database configuration
   database:
     name: oauth2_server
+    host: "ims-authy-mongodb"
+    port: 27017
+    username: oauth2user
+    password: oauth2pass
     
   # OAuth2 client configuration
   oauth2:
@@ -201,6 +205,10 @@ secrets:
 # MongoDB configuration
 mongodb:
   enabled: true
+  # Install MongoDB in the same namespace as the application
+  namespaceOverride: ""
+  fullnameOverride: "ims-authy-mongodb"
+  
   auth:
     enabled: true
     rootUsername: admin
@@ -211,9 +219,12 @@ mongodb:
       - oauth2pass
     databases:
       - oauth2_server
+  
   persistence:
     enabled: true
     size: 10Gi
+    storageClass: ""
+  
   resources:
     limits:
       cpu: 500m
@@ -221,6 +232,27 @@ mongodb:
     requests:
       cpu: 100m
       memory: 128Mi
+  
+  # Service account configuration for MongoDB
+  serviceAccount:
+    create: true
+    name: "ims-authy-mongodb"
+    annotations: {}
+  
+  # Network configuration
+  service:
+    type: ClusterIP
+    port: 27017
+    
+  # Security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+    
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
 
 # External MongoDB configuration (if mongodb.enabled = false)
 externalMongodb:
