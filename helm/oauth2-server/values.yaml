@@ -68,12 +68,6 @@ service:
   targetPort: 8080
   annotations: {}
 
-  service:
-    type: ClusterIP
-    port: 80
-    targetPort: 3000
-    annotations: {}
-
 # Ingress configuration
 ingress:
   enabled: false
@@ -100,14 +94,6 @@ resources:
   requests:
     cpu: 100m
     memory: 128Mi
-
-  resources:
-    limits:
-      cpu: 200m
-      memory: 256Mi
-    requests:
-      cpu: 50m
-      memory: 64Mi
 
 # Autoscaling
 autoscaling:

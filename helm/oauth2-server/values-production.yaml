@@ -30,16 +30,9 @@ ingress:
     nginx.ingress.kubernetes.io/cors-max-age: "86400"
     nginx.ingress.kubernetes.io/enable-cors: "true"
     cert-manager.io/cluster-issuer: letsencrypt-production
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/server-snippet: |
-      location ^~ /.well-known/acme-challenge/ {
-        auth_basic off;
-        auth_request off;
-        allow all;
-        root /usr/share/nginx/html;
-        try_files $uri =404;
-      }
+    acme.cert-manager.io/http01-edit-in-place: "true"
   hosts:    
     - host: ${FRONTEND_HOST}
       paths:
