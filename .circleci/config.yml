@@ -159,7 +159,7 @@ jobs:
             helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/oauth2-server} \
               --namespace ${KUBE_NAMESPACE:-ims-authy} \
               --values /tmp/values-processed.yaml \
-              --create-namespace
+
 
 
 workflows:
