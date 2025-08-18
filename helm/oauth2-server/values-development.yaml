@@ -8,14 +8,14 @@ frontendReplicaCount: 1
 image:
   registry: docker.io
   repository: ims_authy-backend
-  tag: "IMAGE_TAG"
+  tag: "${IMAGE_TAG}"
   pullPolicy: Always
 
 frontend:
   image:
     registry: docker.io
     repository: ims_authy-frontend
-    tag: "IMAGE_TAG"
+    tag: "${IMAGE_TAG}"
     pullPolicy: Always
 
 # Simple NodePort service for easy access

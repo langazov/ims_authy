@@ -8,14 +8,14 @@ frontendReplicaCount: 2
 image:
   registry: docker.io
   repository: ims_authy-backend
-  tag: "IMAGE_TAG"
+  tag: "${IMAGE_TAG}"
   pullPolicy: IfNotPresent
 
 frontend:
   image:
     registry: docker.io
     repository: ims_authy-frontend
-    tag: "IMAGE_TAG"
+    tag: "${IMAGE_TAG}"
     pullPolicy: IfNotPresent
 
 # Ingress configuration with TLS
