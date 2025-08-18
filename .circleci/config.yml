@@ -79,9 +79,10 @@ jobs:
       - run:
           name: Set image names and tags
           command: |
-            export IMAGE_TAG=${COMMIT_SHA}
+            export IMAGE_TAG=${COMMIT_SHA} 
             export FRONTEND_REPO=${DOCKERHUB_REPO_FRONTEND:-"ims_authy-frontend"}
             export BACKEND_REPO=${DOCKERHUB_REPO_BACKEND:-"ims_authy-backend"}
+            echo "export COMMIT_SHA=${CIRCLE_SHA1:0:7}" >> "$BASH_ENV"
             echo "export IMAGE_TAG=${COMMIT_SHA}" >> $BASH_ENV
             echo "export FRONTEND_REPO=${FRONTEND_REPO}" >> $BASH_ENV
             echo "export BACKEND_REPO=${BACKEND_REPO}" >> $BASH_ENV
@@ -138,6 +139,8 @@ jobs:
             set -e
             export IMAGE_TAG=${COMMIT_SHA}
             export ENVIRONMENT=${DEPLOY_ENVIRONMENT:-development}
+            echo "export COMMIT_SHA=${CIRCLE_SHA1:0:7}" >> "$BASH_ENV"
+            echo "export IMAGE_TAG=${IMAGE_TAG}" >> $BASH_ENV
             echo "Using IMAGE_TAG: $IMAGE_TAG for environment: $ENVIRONMENT"
             
             # Use envsubst to replace IMAGE_TAG in the appropriate values file
