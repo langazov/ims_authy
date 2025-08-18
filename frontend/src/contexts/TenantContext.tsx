@@ -23,7 +23,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [availableTenants, setAvailableTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tenantChangeCallbacks, setTenantChangeCallbacks] = useState<(() => void)[]>([]);
+  const tenantChangeCallbacksRef = useRef<(() => void)[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshTenants = async () => {
@@ -74,11 +74,11 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
 
   // Handle tenant switching callback registration
   const onTenantChange = (callback: () => void) => {
-    setTenantChangeCallbacks(prev => [...prev, callback]);
-    
+    tenantChangeCallbacksRef.current.push(callback);
+
     // Return cleanup function
     return () => {
-      setTenantChangeCallbacks(prev => prev.filter(cb => cb !== callback));
+      tenantChangeCallbacksRef.current = tenantChangeCallbacksRef.current.filter(cb => cb !== callback);
     };
   };
 
@@ -99,7 +99,8 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
         // Set a new timeout to execute callbacks after a brief delay
         timeoutRef.current = setTimeout(() => {
           // Execute callbacks sequentially with small delays to prevent overwhelming the server
-          tenantChangeCallbacks.forEach((callback, index) => {
+          const callbacks = tenantChangeCallbacksRef.current.slice();
+          callbacks.forEach((callback, index) => {
             setTimeout(() => {
               try {
                 callback();
@@ -117,7 +118,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
         localStorage.removeItem('activeTenantId');
       }
     }
-  }, [activeTenant, tenantChangeCallbacks, loading]);
+  }, [activeTenant, loading]);
 
   const value: TenantContextType = {
     activeTenant,

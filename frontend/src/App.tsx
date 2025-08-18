@@ -1,12 +1,34 @@
+import React, { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import AuthenticatedApp from '@/components/AuthenticatedApp'
 import EnhancedLoginPage from '@/components/EnhancedLoginPage'
 import CallbackPage from '@/components/CallbackPage'
+import Setup from '@/pages/Setup'
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth()
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null)
+  const [checkingSetup, setCheckingSetup] = useState(true)
 
-  if (isLoading) {
+  useEffect(() => {
+    checkSetupStatus()
+  }, [])
+
+  const checkSetupStatus = async () => {
+    try {
+      const response = await fetch('/api/setup/status')
+      const status = await response.json()
+      setSetupRequired(status.setup_required)
+    } catch (error) {
+      console.error('Failed to check setup status:', error)
+      // If we can't check setup status, assume it's not required
+      setSetupRequired(false)
+    } finally {
+      setCheckingSetup(false)
+    }
+  }
+
+  if (checkingSetup || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -17,8 +39,19 @@ function AppContent() {
     )
   }
 
+  // Show setup page if setup is required
+  if (setupRequired) {
+    return <Setup />
+  }
+
   if (window.location.pathname === '/callback') {
     return <CallbackPage />
+  }
+
+  // Handle setup URL even when setup is not required (redirect to login)
+  if (window.location.pathname === '/setup') {
+    window.location.href = '/'
+    return null
   }
 
   if (!isAuthenticated) {

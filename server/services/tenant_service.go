@@ -14,14 +14,14 @@ import (
 )
 
 type TenantService struct {
-	db                 *database.MongoDB
-	tenantCollection   *mongo.Collection
+	db               *database.MongoDB
+	tenantCollection *mongo.Collection
 }
 
 func NewTenantService(db *database.MongoDB) *TenantService {
 	return &TenantService{
-		db:                 db,
-		tenantCollection:   db.GetCollection("tenants"),
+		db:               db,
+		tenantCollection: db.GetCollection("tenants"),
 	}
 }
 
@@ -143,11 +143,11 @@ func (s *TenantService) UpdateTenant(tenantID string, tenant *models.Tenant) err
 
 	update := bson.M{
 		"$set": bson.M{
-			"name":        tenant.Name,
-			"domain":      tenant.Domain,
-			"subdomain":   tenant.Subdomain,
-			"settings":    tenant.Settings,
-			"updated_at":  tenant.UpdatedAt,
+			"name":       tenant.Name,
+			"domain":     tenant.Domain,
+			"subdomain":  tenant.Subdomain,
+			"settings":   tenant.Settings,
+			"updated_at": tenant.UpdatedAt,
 		},
 	}
 
@@ -215,8 +215,8 @@ func (s *TenantService) InitializeDefaultTenant() error {
 		Active:    true,
 		Settings: models.TenantSettings{
 			AllowUserRegistration: true,
-			RequireTwoFactor:     false,
-			SessionTimeout:       60,
+			RequireTwoFactor:      false,
+			SessionTimeout:        60,
 			CustomBranding: models.TenantBranding{
 				CompanyName:    "OAuth2 Server",
 				PrimaryColor:   "#3b82f6",
@@ -233,7 +233,7 @@ func (s *TenantService) ResolveTenantFromHost(host string) (*models.Tenant, erro
 	// Try to extract subdomain from host
 	// For example: "acme.auth-server.com" -> "acme"
 	// or handle direct domain mapping like "acme.com" -> lookup by domain
-	
+
 	// Simple implementation - check if it's a direct domain match first
 	tenant, err := s.GetTenantByDomain(host)
 	if err == nil {

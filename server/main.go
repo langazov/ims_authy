@@ -52,25 +52,45 @@ func main() {
 	socialAuthService := services.NewSocialAuthService(userService, db)
 	twoFactorService := services.NewTwoFactorService(db)
 
-	// Initialize default tenant if none exist
-	if err := tenantService.InitializeDefaultTenant(); err != nil {
-		log.Printf("Warning: Failed to initialize default tenant: %v", err)
-	}
-
-	// Initialize default scopes if none exist for default tenant
-	if err := scopeService.InitializeDefaultScopes(""); err != nil {
-		log.Printf("Warning: Failed to initialize default scopes: %v", err)
-	}
-
-	// Initialize default groups if none exist for default tenant
-	if err := groupService.InitializeDefaultGroups(""); err != nil {
-		log.Printf("Warning: Failed to initialize default groups: %v", err)
-	}
-
-	// Initialize default social providers if none exist for default tenant
+	// Initialize default social providers service
 	socialProviderService := services.NewSocialProviderService(db)
-	if err := socialProviderService.InitializeDefaultProviders(""); err != nil {
-		log.Printf("Warning: Failed to initialize default social providers: %v", err)
+
+	// Create setup service
+	setupService := services.NewSetupService(db, tenantService, userService, scopeService, groupService, socialProviderService)
+
+	// Check if initial setup is required
+	setupRequired, err := setupService.IsSetupRequired()
+	if err != nil {
+		log.Fatal("Failed to check setup status:", err)
+	}
+
+	if setupRequired {
+		log.Printf("Database is empty - Initial setup required")
+		if _, err := setupService.GenerateSetupToken(); err != nil {
+			log.Fatal("Failed to generate setup token:", err)
+		}
+	} else {
+		// Initialize default tenant if none exist (backwards compatibility)
+		if err := tenantService.InitializeDefaultTenant(); err != nil {
+			log.Printf("Warning: Failed to initialize default tenant: %v", err)
+		}
+	}
+
+	if !setupRequired {
+		// Initialize default scopes if none exist for default tenant
+		if err := scopeService.InitializeDefaultScopes(""); err != nil {
+			log.Printf("Warning: Failed to initialize default scopes: %v", err)
+		}
+
+		// Initialize default groups if none exist for default tenant
+		if err := groupService.InitializeDefaultGroups(""); err != nil {
+			log.Printf("Warning: Failed to initialize default groups: %v", err)
+		}
+
+		// Initialize default social providers if none exist for default tenant
+		if err := socialProviderService.InitializeDefaultProviders(""); err != nil {
+			log.Printf("Warning: Failed to initialize default social providers: %v", err)
+		}
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
@@ -82,8 +102,14 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
 	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService)
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
+	setupHandler := handlers.NewSetupHandler(setupService)
 
 	router := mux.NewRouter()
+
+	// Setup endpoints (no middleware, available during initial setup)
+	router.HandleFunc("/api/setup/status", setupHandler.GetSetupStatus).Methods("GET")
+	router.HandleFunc("/api/setup/validate-token", setupHandler.ValidateSetupToken).Methods("POST")
+	router.HandleFunc("/api/setup/complete", setupHandler.PerformSetup).Methods("POST")
 
 	// Apply tenant middleware to all API routes
 	api := router.PathPrefix("/api/v1").Subrouter()
@@ -190,7 +216,7 @@ func main() {
 
 	// Direct login route for specific tenant
 	tenantRouter.HandleFunc("/login", authHandler.Login).Methods("POST")
-	
+
 	// Registration route for specific tenant
 	tenantRouter.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
 

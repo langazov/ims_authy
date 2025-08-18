@@ -278,12 +278,12 @@ export default function UserManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.groups?.length > 0 ? (
+                      {Array.isArray(user.groups) && user.groups.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {(user.groups || []).map((groupName) => {
+                          {user.groups.map((groupName, index) => {
                             const group = groups.find((g: any) => g.name === groupName)
                             return (
-                              <Badge key={groupName} variant="outline" className="text-xs">
+                              <Badge key={`${user.id}-${groupName}-${index}`} variant="outline" className="text-xs">
                                 {group?.name || groupName}
                               </Badge>
                             )
