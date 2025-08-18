@@ -55,9 +55,9 @@ jobs:
             cd server
             go test ./...
       - persist_to_workspace:
-          root: server
+          root: .
           paths:
-            - .
+            - server
 
   docker-build-and-push:
     docker:
