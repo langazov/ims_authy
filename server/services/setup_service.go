@@ -20,24 +20,24 @@ import (
 type SetupService struct {
 	db                    *database.MongoDB
 	tenantService         *TenantService
-	userService          *UserService
-	scopeService         *ScopeService
-	groupService         *GroupService
+	userService           *UserService
+	scopeService          *ScopeService
+	groupService          *GroupService
 	socialProviderService *SocialProviderService
-	setupToken           string
-	setupTokenExpiry     time.Time
+	setupToken            string
+	setupTokenExpiry      time.Time
 }
 
 type SetupRequest struct {
-	SetupToken    string                `json:"setup_token"`
-	TenantName    string                `json:"tenant_name"`
-	TenantDomain  string                `json:"tenant_domain"`
-	TenantSubdomain string              `json:"tenant_subdomain"`
-	AdminEmail    string                `json:"admin_email"`
-	AdminPassword string                `json:"admin_password"`
-	AdminFirstName string              `json:"admin_first_name"`
-	AdminLastName string               `json:"admin_last_name"`
-	Settings      models.TenantSettings `json:"settings"`
+	SetupToken      string                `json:"setup_token"`
+	TenantName      string                `json:"tenant_name"`
+	TenantDomain    string                `json:"tenant_domain"`
+	TenantSubdomain string                `json:"tenant_subdomain"`
+	AdminEmail      string                `json:"admin_email"`
+	AdminPassword   string                `json:"admin_password"`
+	AdminFirstName  string                `json:"admin_first_name"`
+	AdminLastName   string                `json:"admin_last_name"`
+	Settings        models.TenantSettings `json:"settings"`
 }
 
 func NewSetupService(
@@ -51,9 +51,9 @@ func NewSetupService(
 	return &SetupService{
 		db:                    db,
 		tenantService:         tenantService,
-		userService:          userService,
-		scopeService:         scopeService,
-		groupService:         groupService,
+		userService:           userService,
+		scopeService:          scopeService,
+		groupService:          groupService,
 		socialProviderService: socialProviderService,
 	}
 }
@@ -97,14 +97,14 @@ func (s *SetupService) IsSetupRequired() (bool, error) {
 		groupsCount = 0 // Continue anyway
 	}
 
-	log.Printf("Database status check - Tenants: %d, Users: %d, Scopes: %d, Groups: %d", 
+	log.Printf("Database status check - Tenants: %d, Users: %d, Scopes: %d, Groups: %d",
 		tenantsCount, usersCount, scopesCount, groupsCount)
-	
+
 	// Setup is required if both tenants and users collections are empty
 	// This indicates a fresh installation
 	setupRequired := tenantsCount == 0 && usersCount == 0
 	log.Printf("Setup required: %v", setupRequired)
-	
+
 	return setupRequired, nil
 }
 
@@ -136,7 +136,7 @@ func (s *SetupService) ValidateSetupToken(token string) bool {
 	if s.setupToken == "" {
 		return false
 	}
-	
+
 	if time.Now().After(s.setupTokenExpiry) {
 		log.Printf("Setup token has expired. Please restart the server to generate a new token.")
 		return false
@@ -211,13 +211,14 @@ func (s *SetupService) createDefaultAdminUser(tenantID string, req *SetupRequest
 	adminUser := &models.User{
 		TenantID:     tenantID,
 		Email:        req.AdminEmail,
-		Username:     req.AdminEmail, // Use email as username
+		Username:     req.AdminEmail,    // Use email as username
 		PasswordHash: req.AdminPassword, // Will be hashed by CreateUser
 		FirstName:    req.AdminFirstName,
 		LastName:     req.AdminLastName,
-		Groups:       []string{adminGroup.ID.Hex()},
-		Scopes:       adminGroup.Scopes, // Inherit all admin scopes
-		Active:       true,
+		// Store group names instead of internal IDs to match API expectations
+		Groups: []string{adminGroup.Name},
+		Scopes: adminGroup.Scopes, // Inherit all admin scopes
+		Active: true,
 	}
 
 	if err := s.userService.CreateUser(adminUser); err != nil {
@@ -231,9 +232,9 @@ func (s *SetupService) createDefaultAdminUser(tenantID string, req *SetupRequest
 func (s *SetupService) GetSetupStatus() map[string]interface{} {
 	required, _ := s.IsSetupRequired()
 	hasValidToken := s.setupToken != "" && time.Now().Before(s.setupTokenExpiry)
-	
+
 	status := map[string]interface{}{
-		"setup_required": required,
+		"setup_required":  required,
 		"has_valid_token": hasValidToken,
 	}
 
