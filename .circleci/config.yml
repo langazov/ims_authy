@@ -141,7 +141,7 @@ jobs:
             BACKEND_IMAGE=${DOCKERHUB_USERNAME}/${DOCKERHUB_REPO_BACKEND:-ims_authy-backend}
             echo "Deploying with images: $FRONTEND_IMAGE:$IMAGE_TAG and $BACKEND_IMAGE:$IMAGE_TAG"
             helm upgrade --install ${HELM_RELEASE:-ims-authy} ${HELM_CHART_PATH:-helm/oauth2-server} \
-              --namespace ${KUBE_NAMESPACE:-ims-authy} --create-namespace \
+              --namespace ${KUBE_NAMESPACE:-ims-authy} \
               --set frontend.image.repository=$FRONTEND_IMAGE --set frontend.image.tag=$IMAGE_TAG \
               --set image.repository=$BACKEND_IMAGE --set image.tag=$IMAGE_TAG
 
