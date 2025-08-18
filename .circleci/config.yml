@@ -149,9 +149,9 @@ jobs:
             sudo apt-get install -y gettext-base
 
             if [ "$ENVIRONMENT" = "production" ]; then
-              envsubst '$IMAGE_TAG' < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
+              envsubst '$IMAGE_TAG $FRONTEND_HOST $BACKEND_HOST' < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
             else
-              envsubst '$IMAGE_TAG' < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
+              envsubst '$IMAGE_TAG $FRONTEND_HOST $BACKEND_HOST' < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
             fi
             
             echo "Processed values file:"
