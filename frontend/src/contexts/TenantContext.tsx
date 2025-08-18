@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Tenant } from '@/types/tenant';
 import { tenantService } from '@/lib/tenantService';
 
@@ -9,6 +9,7 @@ interface TenantContextType {
   error: string | null;
   setActiveTenant: (tenant: Tenant | null) => void;
   refreshTenants: () => Promise<void>;
+  onTenantChange: (callback: () => void) => () => void;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -22,6 +23,8 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [availableTenants, setAvailableTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tenantChangeCallbacks, setTenantChangeCallbacks] = useState<(() => void)[]>([]);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const refreshTenants = async () => {
     try {
@@ -60,11 +63,53 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     refreshTenants();
   }, []);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Handle tenant switching callback registration
+  const onTenantChange = (callback: () => void) => {
+    setTenantChangeCallbacks(prev => [...prev, callback]);
+    
+    // Return cleanup function
+    return () => {
+      setTenantChangeCallbacks(prev => prev.filter(cb => cb !== callback));
+    };
+  };
+
   // Update auth context with active tenant ID when it changes
   useEffect(() => {
     if (activeTenant) {
       // Store active tenant ID for API requests
       localStorage.setItem('activeTenantId', activeTenant.id || '');
+      
+      // Trigger all registered callbacks when tenant changes (but not on initial load)
+      // Debounce the callback execution to prevent too many simultaneous requests
+      if (!loading) {
+        // Clear any existing timeout
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        
+        // Set a new timeout to execute callbacks after a brief delay
+        timeoutRef.current = setTimeout(() => {
+          // Execute callbacks sequentially with small delays to prevent overwhelming the server
+          tenantChangeCallbacks.forEach((callback, index) => {
+            setTimeout(() => {
+              try {
+                callback();
+              } catch (error) {
+                console.error('Error in tenant change callback:', error);
+              }
+            }, index * 100); // 100ms delay between each callback
+          });
+        }, 200); // 200ms initial delay
+      }
     } else {
       // Don't remove the stored tenant during initial loading (avoids race with refreshTenants)
       // Only remove when we're not loading tenants (e.g. explicit clear/logout)
@@ -72,7 +117,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
         localStorage.removeItem('activeTenantId');
       }
     }
-  }, [activeTenant]);
+  }, [activeTenant, tenantChangeCallbacks, loading]);
 
   const value: TenantContextType = {
     activeTenant,
@@ -80,7 +125,8 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     loading,
     error,
     setActiveTenant,
-    refreshTenants
+    refreshTenants,
+    onTenantChange
   };
 
   return (

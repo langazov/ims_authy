@@ -62,6 +62,11 @@ func main() {
 		log.Printf("Warning: Failed to initialize default scopes: %v", err)
 	}
 
+	// Initialize default groups if none exist for default tenant
+	if err := groupService.InitializeDefaultGroups(""); err != nil {
+		log.Printf("Warning: Failed to initialize default groups: %v", err)
+	}
+
 	// Initialize default social providers if none exist for default tenant
 	socialProviderService := services.NewSocialProviderService(db)
 	if err := socialProviderService.InitializeDefaultProviders(""); err != nil {
@@ -69,8 +74,8 @@ func main() {
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
-	tenantHandler := handlers.NewTenantHandler(tenantService, socialProviderService)
-	userHandler := handlers.NewUserHandler(userService)
+	tenantHandler := handlers.NewTenantHandler(tenantService, socialProviderService, scopeService, groupService)
+	userHandler := handlers.NewUserHandler(userService, tenantService, groupService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
 	scopeHandler := handlers.NewScopeHandler(scopeService)
@@ -98,6 +103,9 @@ func main() {
 	api.HandleFunc("/users/{id}", userHandler.GetUser).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.UpdateUser).Methods("PUT")
 	api.HandleFunc("/users/{id}", userHandler.DeleteUser).Methods("DELETE")
+
+	// Public user registration endpoint (tenant-scoped but no auth required)
+	api.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
 
 	api.HandleFunc("/groups", groupHandler.CreateGroup).Methods("POST")
 	api.HandleFunc("/groups", groupHandler.GetGroups).Methods("GET")
@@ -182,6 +190,9 @@ func main() {
 
 	// Direct login route for specific tenant
 	tenantRouter.HandleFunc("/login", authHandler.Login).Methods("POST")
+	
+	// Registration route for specific tenant
+	tenantRouter.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
 
 	// Legacy routes (backwards compatibility) - these will use default tenant
 	// OAuth routes with tenant middleware

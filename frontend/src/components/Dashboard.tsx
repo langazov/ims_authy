@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Group, ShieldClose, Cog, Activity } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface ActivityItem {
   id: string
@@ -19,35 +20,60 @@ export default function Dashboard() {
   const [activity] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { onTenantChange, activeTenant } = useTenant()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [usersData, groupsData, clientsData] = await Promise.all([
-          apiClient.users.getAll(),
-          apiClient.groups.getAll(),
-          apiClient.clients.getAll()
-        ])
-        
-        // Ensure we always have arrays, even if API returns null
-        setUsers(Array.isArray(usersData) ? usersData : [])
-        setGroups(Array.isArray(groupsData) ? groupsData : [])
-        setClients(Array.isArray(clientsData) ? clientsData : [])
-        setError(null)
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error)
-        setError('Failed to load dashboard data')
-        // Keep arrays as empty arrays even on error
-        setUsers([])
-        setGroups([])
-        setClients([])
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    // Don't fetch if no active tenant is set
+    if (!activeTenant?.id) {
+      setUsers([])
+      setGroups([])
+      setClients([])
+      setLoading(false)
+      setError(null)
+      return
     }
 
+    try {
+      setLoading(true)
+      
+      // Ensure localStorage is updated before making API calls
+      localStorage.setItem('activeTenantId', activeTenant.id)
+      
+      const [usersData, groupsData, clientsData] = await Promise.all([
+        apiClient.users.getAll(),
+        apiClient.groups.getAll(),
+        apiClient.clients.getAll()
+      ])
+      
+      // Ensure we always have arrays, even if API returns null
+      setUsers(Array.isArray(usersData) ? usersData : [])
+      setGroups(Array.isArray(groupsData) ? groupsData : [])
+      setClients(Array.isArray(clientsData) ? clientsData : [])
+      setError(null)
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error)
+      setError('Failed to load dashboard data')
+      // Keep arrays as empty arrays even on error
+      setUsers([])
+      setGroups([])
+      setClients([])
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTenant])
+
+  useEffect(() => {
     fetchData()
-  }, [])
+  }, [fetchData, activeTenant]) // Add activeTenant dependency to reload when tenant changes
+
+  // Register for tenant change events to reload data (for when component is already mounted)
+  useEffect(() => {
+    const cleanup = onTenantChange(() => {
+      fetchData()
+    })
+    
+    return cleanup
+  }, [onTenantChange, fetchData])
 
   const safeUsers = users || []
   const safeGroups = groups || []

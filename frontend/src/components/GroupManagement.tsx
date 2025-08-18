@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +9,7 @@ import GroupForm from './GroupForm'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
 import { apiClient } from '@/lib/api'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface Group {
   id: string
@@ -22,6 +23,7 @@ interface Group {
 
 export default function GroupManagement() {
   const { canManageGroups } = usePermissions()
+  const { onTenantChange, activeTenant } = useTenant()
   const [groups, setGroups] = useState<Group[]>([])
   const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -43,20 +45,41 @@ export default function GroupManagement() {
   const safeGroups = groups || []
 
   // Fetch groups from backend (filtered by activeTenantId)
-  useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const fetchedGroups = await apiClient.groups.getAll()
-        setGroups(fetchedGroups)
-      } catch (error) {
-        console.error('Error fetching groups:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchGroups = useCallback(async () => {
+    // Don't fetch if no active tenant is set
+    if (!activeTenant?.id) {
+      setGroups([])
+      setLoading(false)
+      return
     }
 
+    try {
+      setLoading(true)
+      
+      // Ensure localStorage is updated before making API calls
+      localStorage.setItem('activeTenantId', activeTenant.id)
+      
+      const fetchedGroups = await apiClient.groups.getAll()
+      setGroups(fetchedGroups)
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTenant])
+
+  useEffect(() => {
     fetchGroups()
-  }, [])
+  }, [fetchGroups, activeTenant]) // Add activeTenant dependency to reload when tenant changes
+
+  // Register for tenant change events to reload data (for when component is already mounted)
+  useEffect(() => {
+    const cleanup = onTenantChange(() => {
+      fetchGroups()
+    })
+    
+    return cleanup
+  }, [onTenantChange, fetchGroups])
   
   const filteredGroups = safeGroups.filter(group =>
     group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -14,6 +14,8 @@ import (
 type TenantHandler struct {
 	tenantService         *services.TenantService
 	socialProviderService *services.SocialProviderService
+	scopeService          *services.ScopeService
+	groupService          *services.GroupService
 }
 
 type CreateTenantRequest struct {
@@ -30,10 +32,12 @@ type UpdateTenantRequest struct {
 	Settings  models.TenantSettings `json:"settings"`
 }
 
-func NewTenantHandler(tenantService *services.TenantService, socialProviderService *services.SocialProviderService) *TenantHandler {
+func NewTenantHandler(tenantService *services.TenantService, socialProviderService *services.SocialProviderService, scopeService *services.ScopeService, groupService *services.GroupService) *TenantHandler {
 	return &TenantHandler{
 		tenantService:         tenantService,
 		socialProviderService: socialProviderService,
+		scopeService:          scopeService,
+		groupService:          groupService,
 	}
 }
 
@@ -73,6 +77,22 @@ func (h *TenantHandler) CreateTenant(w http.ResponseWriter, r *http.Request) {
 	if err := h.tenantService.CreateTenant(tenant); err != nil {
 		http.Error(w, "Failed to create tenant: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Initialize default scopes for this tenant (best-effort)
+	if h.scopeService != nil {
+		if err := h.scopeService.InitializeDefaultScopes(tenant.ID.Hex()); err != nil {
+			// Log but don't fail the request
+			log.Printf("Warning: Failed to initialize default scopes for tenant %s: %v", tenant.ID.Hex(), err)
+		}
+	}
+
+	// Initialize default groups for this tenant (best-effort)
+	if h.groupService != nil {
+		if err := h.groupService.InitializeDefaultGroups(tenant.ID.Hex()); err != nil {
+			// Log but don't fail the request
+			log.Printf("Warning: Failed to initialize default groups for tenant %s: %v", tenant.ID.Hex(), err)
+		}
 	}
 
 	// Initialize default social providers for this tenant (best-effort)

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import ClientForm from './ClientForm'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
 import { apiClient } from '@/lib/api'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface OAuthClient {
   id: string
@@ -40,6 +41,7 @@ interface ClientFormData {
 
 export default function ClientManagement() {
   const { canManageClients } = usePermissions()
+  const { onTenantChange, activeTenant } = useTenant()
   const [clients, setClients] = useState<OAuthClient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedClient, setSelectedClient] = useState<OAuthClient | null>(null)
@@ -62,20 +64,43 @@ export default function ClientManagement() {
   const safeClients = clients || []
 
   // Fetch clients from backend (filtered by activeTenantId)
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const fetchedClients = await apiClient.clients.getAll()
-        setClients(fetchedClients)
-      } catch (error) {
-        console.error('Error fetching clients:', error)
-      } finally {
-        setLoading(false)
-      }
+  const fetchClients = useCallback(async () => {
+    // Don't fetch if no active tenant is set
+    if (!activeTenant?.id) {
+      setClients([])
+      setLoading(false)
+      return
     }
 
+    try {
+      setLoading(true)
+      
+      // Ensure localStorage is updated before making API calls
+      localStorage.setItem('activeTenantId', activeTenant.id)
+      
+      const fetchedClients = await apiClient.clients.getAll()
+      setClients(fetchedClients)
+    } catch (error) {
+      console.error('Error fetching clients:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTenant])
+
+  useEffect(() => {
     fetchClients()
-  }, [])
+  }, [fetchClients, activeTenant]) // Add activeTenant dependency to reload when tenant changes
+
+  // Register for tenant change events to reload data (for when component is already mounted)
+  useEffect(() => {
+    const cleanup = onTenantChange(() => {
+      fetchClients()
+      setVisibleSecrets(new Set()) // Clear visible secrets on tenant change
+      setNewlyCreatedClient(null) // Clear newly created client on tenant change
+    })
+    
+    return cleanup
+  }, [onTenantChange, fetchClients])
   
   const filteredClients = safeClients.filter(client =>
     client?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
