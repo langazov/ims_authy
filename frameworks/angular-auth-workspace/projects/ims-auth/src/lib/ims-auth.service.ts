@@ -149,7 +149,7 @@ export class IMSAuthService {
    */
   setup2FA(): Observable<TwoFactorSetupResponse> {
     return this.http.post<TwoFactorSetupResponse>(
-      `${this.config.serverUrl}/2fa/setup`,
+      `${this.config.serverUrl}/api/v1/2fa/setup`,
       {},
       { headers: this.getAuthHeaders() }
     ).pipe(
@@ -165,7 +165,7 @@ export class IMSAuthService {
    */
   enable2FA(code: string): Observable<{ success: boolean; backup_codes: string[] }> {
     return this.http.post<{ success: boolean; backup_codes: string[] }>(
-      `${this.config.serverUrl}/2fa/enable`,
+      `${this.config.serverUrl}/api/v1/2fa/enable`,
       { code },
       { headers: this.getAuthHeaders() }
     ).pipe(
@@ -181,7 +181,7 @@ export class IMSAuthService {
    */
   disable2FA(): Observable<{ success: boolean }> {
     return this.http.post<{ success: boolean }>(
-      `${this.config.serverUrl}/2fa/disable`,
+      `${this.config.serverUrl}/api/v1/2fa/disable`,
       {},
       { headers: this.getAuthHeaders() }
     ).pipe(
@@ -197,7 +197,7 @@ export class IMSAuthService {
    */
   get2FAStatus(): Observable<{ enabled: boolean; has_backup_codes: boolean }> {
     return this.http.get<{ enabled: boolean; has_backup_codes: boolean }>(
-      `${this.config.serverUrl}/2fa/status`,
+      `${this.config.serverUrl}/api/v1/2fa/status`,
       { headers: this.getAuthHeaders() }
     ).pipe(
       catchError(error => {
@@ -212,7 +212,7 @@ export class IMSAuthService {
    */
   verify2FA(code: string): Observable<any> {
     return this.http.post(
-      `${this.config.serverUrl}/2fa/verify`,
+      `${this.config.serverUrl}/api/v1/2fa/verify`,
       { code },
       { headers: this.getAuthHeaders() }
     ).pipe(

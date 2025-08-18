@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"oauth2-openid-server/services"
 )
@@ -10,6 +11,7 @@ import (
 type TwoFactorHandler struct {
 	twoFactorService *services.TwoFactorService
 	userService      *services.UserService
+	oauthService     *services.OAuthService
 }
 
 type SetupTwoFactorRequest struct {
@@ -36,10 +38,11 @@ type VerifySessionRequest struct {
 	Code      string `json:"code"`
 }
 
-func NewTwoFactorHandler(twoFactorService *services.TwoFactorService, userService *services.UserService) *TwoFactorHandler {
+func NewTwoFactorHandler(twoFactorService *services.TwoFactorService, userService *services.UserService, oauthService *services.OAuthService) *TwoFactorHandler {
 	return &TwoFactorHandler{
 		twoFactorService: twoFactorService,
 		userService:      userService,
+		oauthService:     oauthService,
 	}
 }
 
@@ -214,20 +217,48 @@ func (h *TwoFactorHandler) GetTwoFactorStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		http.Error(w, "User ID is required", http.StatusBadRequest)
+	// Extract user ID from JWT token in Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		http.Error(w, "Authorization header required", http.StatusUnauthorized)
 		return
 	}
 
-	required, err := h.twoFactorService.IsTwoFactorRequired(userID)
+	// Extract token from "Bearer <token>" format
+	tokenParts := strings.SplitN(authHeader, " ", 2)
+	if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+		http.Error(w, "Invalid authorization header format", http.StatusUnauthorized)
+		return
+	}
+
+	// Validate token and extract user ID
+	claims, err := h.oauthService.ValidateAccessToken(tokenParts[1])
+	if err != nil {
+		http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+		return
+	}
+
+	userID := claims.UserID
+	if userID == "" {
+		http.Error(w, "User ID not found in token", http.StatusUnauthorized)
+		return
+	}
+
+	enabled, err := h.twoFactorService.IsTwoFactorRequired(userID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	hasBackupCodes, err := h.twoFactorService.HasBackupCodes(userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	response := map[string]interface{}{
-		"enabled": required,
+		"enabled":          enabled,
+		"has_backup_codes": hasBackupCodes,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

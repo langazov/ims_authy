@@ -174,6 +174,21 @@ export class ProfileComponent implements OnInit {
     loadUserProfile(): void {
         this.user = this.authService.getCurrentUser();
         
+        if (!this.user) {
+            console.error('No user found, redirecting to login');
+            this.router.navigate(['/login']);
+            return;
+        }
+
+        // Check if user has required profile scope OR is in administrators group
+        const hasProfileScope = this.user.scopes?.includes('profile') || false;
+        const hasAdminGroup = this.user.groups?.includes('administrators') || false;
+        
+        if (!hasProfileScope && !hasAdminGroup) {
+            console.error('User does not have profile scope or admin group, redirecting to access denied');
+            this.router.navigate(['/access-denied']);
+            return;
+        }
     }
 
     onImageError(event: any): void {

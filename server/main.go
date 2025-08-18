@@ -76,7 +76,7 @@ func main() {
 	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
 	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService)
-	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService)
+	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
 
 	router := mux.NewRouter()
 

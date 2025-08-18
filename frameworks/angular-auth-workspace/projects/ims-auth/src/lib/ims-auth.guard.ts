@@ -37,28 +37,45 @@ export class IMSAuthGuard implements CanActivate, CanActivateChild {
           return false;
         }
 
-        // Check for required scopes
+        // Check for required scopes and groups (OR logic - user needs either scopes OR groups)
         const requiredScopes = routeData['scopes'] as string[];
+        const requiredGroups = routeData['groups'] as string[];
+        
         console.log('Checking required scopes:', requiredScopes);
+        console.log('Checking required groups:', requiredGroups);
+        
+        // If no scopes or groups are required, allow access
+        if ((!requiredScopes || requiredScopes.length === 0) && 
+            (!requiredGroups || requiredGroups.length === 0)) {
+          return true;
+        }
+        
+        let hasAccess = false;
+        
+        // Check if user has any required scopes
         if (requiredScopes && requiredScopes.length > 0) {
           const hasRequiredScope = requiredScopes.some(scope => this.authService.hasScope(scope));
-          if (!hasRequiredScope) {
-            this.router.navigate(['/access-denied']);
-            return false;
+          if (hasRequiredScope) {
+            console.log('User has required scopes:', requiredScopes);
+            hasAccess = true;
           }
         }
-
-        // Check for required groups
-        const requiredGroups = routeData['groups'] as string[];
-        console.log('Checking required groups:', requiredGroups);
-        if (requiredGroups && requiredGroups.length > 0) {
+        
+        // Check if user has any required groups (OR with scopes)
+        if (!hasAccess && requiredGroups && requiredGroups.length > 0) {
           const hasRequiredGroup = requiredGroups.some(group => this.authService.hasGroup(group));
-          if (!hasRequiredGroup) {
-            this.router.navigate(['/access-denied']);
-            return false;
+          if (hasRequiredGroup) {
+            console.log('User has required groups:', requiredGroups);
+            hasAccess = true;
           }
         }
-
+        
+        if (!hasAccess) {
+          console.log('User does not have required scopes or groups. Scopes:', requiredScopes, 'Groups:', requiredGroups);
+          this.router.navigate(['/access-denied']);
+          return false;
+        }
+        
         return true;
       })
     );

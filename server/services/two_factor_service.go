@@ -286,6 +286,24 @@ func (s *TwoFactorService) IsTwoFactorRequired(userID string) (bool, error) {
 	return user.TwoFactorEnabled, nil
 }
 
+func (s *TwoFactorService) HasBackupCodes(userID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	objectID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return false, errors.New("invalid user ID")
+	}
+
+	var user models.User
+	err = s.userCollection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&user)
+	if err != nil {
+		return false, errors.New("user not found")
+	}
+
+	return len(user.BackupCodes) > 0, nil
+}
+
 func (s *TwoFactorService) generateSecret() string {
 	secret := make([]byte, 20)
 	_, err := rand.Read(secret)

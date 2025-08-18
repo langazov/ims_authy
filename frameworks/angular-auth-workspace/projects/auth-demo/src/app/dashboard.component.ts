@@ -14,7 +14,7 @@ import { IMSAuthService, User, IMSTwoFactorSetupComponent } from 'ims-auth';
           <h1>IMS Dashboard</h1>
           <nav class="nav-menu">
             <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-            <a *ngIf="hasProfileAccess()" routerLink="/profile" routerLinkActive="active">Profile</a>
+            <a routerLink="/profile" routerLinkActive="active">Profile</a>
           </nav>
           <div class="user-info">
             <span>Welcome, {{ user?.email }}</span>
@@ -486,6 +486,10 @@ export class DashboardComponent implements OnInit {
   }
 
   hasProfileAccess(): boolean {
-    return this.user?.scopes?.includes('profile') || false;
+    // Check if user has 'profile' scope OR is in 'administrators' group
+    const hasProfileScope = this.user?.scopes?.includes('profile') || false;
+    const hasAdminGroup = this.user?.groups?.includes('administrators') || false;
+    
+    return hasProfileScope || hasAdminGroup;
   }
 }
