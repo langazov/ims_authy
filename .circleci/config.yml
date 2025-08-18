@@ -142,9 +142,9 @@ jobs:
             
             # Use envsubst to replace IMAGE_TAG in the appropriate values file
             if [ "$ENVIRONMENT" = "production" ]; then
-              envsubst < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
+              circleci env subst < helm/oauth2-server/values-production.yaml > /tmp/values-processed.yaml
             else
-              envsubst < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
+              circleci env subst < helm/oauth2-server/values-development.yaml > /tmp/values-processed.yaml
             fi
             
             echo "Processed values file:"
