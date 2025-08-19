@@ -37,7 +37,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/google/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/google/callback`,
     scopes: ['openid', 'profile', 'email'],
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
@@ -50,7 +50,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/github/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/github/callback`,
     scopes: ['user:email'],
     authUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
@@ -63,7 +63,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/facebook/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/facebook/callback`,
     scopes: ['email', 'public_profile'],
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
@@ -76,7 +76,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/apple/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/apple/callback`,
     scopes: ['name', 'email'],
     authUrl: 'https://appleid.apple.com/auth/authorize',
     tokenUrl: 'https://appleid.apple.com/auth/token',
@@ -119,7 +119,7 @@ const setupGuides = {
       'Create a new project or select existing one',
       'Enable Google+ API',
       'Go to Credentials → Create OAuth 2.0 Client ID',
-      'Set authorized redirect URI to: http://localhost:8080/auth/google/callback',
+      `Set authorized redirect URI to: ${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/google/callback`,
       'Copy Client ID and Client Secret'
     ],
     docsUrl: 'https://developers.google.com/identity/protocols/oauth2'
@@ -129,7 +129,7 @@ const setupGuides = {
     steps: [
       'Go to GitHub Settings → Developer settings',
       'Click "New OAuth App"',
-      'Set Authorization callback URL to: http://localhost:8080/auth/github/callback',
+      `Set Authorization callback URL to: ${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/github/callback`,
       'Register application',
       'Copy Client ID and generate Client Secret'
     ],
@@ -141,7 +141,7 @@ const setupGuides = {
       'Go to Facebook for Developers (developers.facebook.com)',
       'Create a new app',
       'Add Facebook Login product',
-      'Set Valid OAuth Redirect URI to: http://localhost:8080/auth/facebook/callback',
+      `Set Valid OAuth Redirect URI to: ${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/facebook/callback`,
       'Copy App ID and App Secret'
     ],
     docsUrl: 'https://developers.facebook.com/docs/facebook-login'
@@ -152,7 +152,7 @@ const setupGuides = {
       'Go to Apple Developer Account',
       'Create a Services ID',
       'Configure Sign In with Apple',
-      'Set Return URL to: http://localhost:8080/auth/apple/callback',
+      `Set Return URL to: ${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/apple/callback`,
       'Generate private key and create JWT client secret'
     ],
     docsUrl: 'https://developer.apple.com/documentation/sign_in_with_apple'
