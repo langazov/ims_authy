@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
@@ -24,11 +25,40 @@ func corsMiddleware(next http.Handler) http.Handler {
 			println("CORS request:", r.Method, "from origin:", origin, "to:", r.URL.Path)
 		}
 		
-		// Allow specific origins or fall back to request origin for credentials support
+		// When credentials are allowed, we cannot use wildcard
+		// Always use the specific origin when available, or allow common development origins
 		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
+			// Validate against allowed origins for security
+			allowedOrigins := []string{
+				"https://authy.imsc.eu",
+				"https://oauth2.imsc.eu", 
+				"http://localhost:5173",
+				"http://localhost:3000",
+				"http://localhost:8080",
+			}
+			
+			originAllowed := false
+			for _, allowedOrigin := range allowedOrigins {
+				if origin == allowedOrigin {
+					originAllowed = true
+					break
+				}
+			}
+			
+			if originAllowed {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				// For development, allow any localhost origin
+				if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				} else {
+					// Default to the main frontend URL for unknown origins
+					w.Header().Set("Access-Control-Allow-Origin", "https://authy.imsc.eu")
+				}
+			}
 		} else {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			// No origin header - default to main frontend URL (never use wildcard with credentials)
+			w.Header().Set("Access-Control-Allow-Origin", "https://authy.imsc.eu")
 		}
 		
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
