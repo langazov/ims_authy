@@ -111,6 +111,8 @@ class AuthService {
       console.info('[auth] handleCallback - processing direct social login, clearing existing tokens')
       localStorage.removeItem(this.STORAGE_KEY)
       localStorage.removeItem('direct_login_user')
+      localStorage.removeItem(this.CODE_VERIFIER_KEY)
+      localStorage.removeItem('oauth_state')
     }
 
     const storedState = localStorage.getItem('oauth_state')
