@@ -67,6 +67,10 @@ spec:
               value: {{ .Values.config.oauth2.authServerUrl | quote }}
             - name: TOKEN_SERVER_URL
               value: {{ .Values.config.oauth2.tokenServerUrl | quote }}
+            {{- if .Values.config.forceSetup }}
+            - name: FORCE_SETUP
+              value: {{ .Values.config.forceSetup | quote }}
+            {{- end }}
             {{- if .Values.config.socialLogin.google.clientId }}
             - name: GOOGLE_CLIENT_ID
               value: {{ .Values.config.socialLogin.google.clientId | quote }}

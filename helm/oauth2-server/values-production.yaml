@@ -128,6 +128,8 @@ config:
   # Server configuration
   port: 8080
   jwtSecret: "Zrcnc0K2sDfVC2hu"
+  # Force setup mode (set to "true" to force setup wizard)
+  forceSetup: false
   
   # Database configuration
   database:

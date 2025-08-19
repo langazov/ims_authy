@@ -136,6 +136,8 @@ config:
   # Server configuration
   port: 8080
   jwtSecret: "your-super-secret-jwt-key-change-this-in-production"
+  # Force setup mode (set to "true" to force setup wizard)
+  forceSetup: false
   
   # Database configuration
   database:
