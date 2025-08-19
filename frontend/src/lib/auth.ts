@@ -118,12 +118,17 @@ class AuthService {
       }
     }
 
-    if (state !== storedState) {
+    // For direct social login, the state will be 'direct-social-login'
+    if (state === 'direct-social-login') {
+      console.info('[auth] handleCallback - direct social login detected')
+      // Skip state validation for direct social login
+    } else if (state !== storedState) {
       console.warn('[auth] handleCallback - invalid state', { received: state, stored: storedState })
       throw new Error('Invalid state parameter')
     }
 
-    if (!codeVerifier) {
+    // Code verifier is not required for direct social login
+    if (!codeVerifier && state !== 'direct-social-login') {
       console.warn('[auth] handleCallback - code verifier not found')
       throw new Error('Code verifier not found')
     }
@@ -133,7 +138,11 @@ class AuthService {
     tokenData.append('code', code)
     tokenData.append('redirect_uri', config.oauth.redirectUri)
     tokenData.append('client_id', config.oauth.clientId)
-    tokenData.append('code_verifier', codeVerifier)
+    
+    // Only add code verifier if it exists (not needed for direct social login)
+    if (codeVerifier) {
+      tokenData.append('code_verifier', codeVerifier)
+    }
 
     // Use tenant-specific URL if a tenant is selected
     // Always use legacy token URL (no tenant-specific routing)

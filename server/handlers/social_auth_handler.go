@@ -118,20 +118,32 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Validate state parameter
-	cookie, err := r.Cookie("oauth_state_" + provider)
-	if err != nil || cookie.Value != state {
-		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
-		return
+	// Validate state parameter - skip validation for direct social login
+	if state == "direct-social-login" {
+		// Skip state validation for direct social login
+		println("Direct social login callback detected, state:", state)
+	} else {
+		// Validate state parameter against cookie for normal OAuth flow
+		cookie, err := r.Cookie("oauth_state_" + provider)
+		if err != nil || cookie.Value != state {
+			if state == "" {
+				http.Error(w, "Missing authorization code or state parameter", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+			return
+		}
 	}
 
-	// Clear the state cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:   "oauth_state_" + provider,
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
-	})
+	// Clear the state cookie (only if not direct social login)
+	if state != "direct-social-login" {
+		http.SetCookie(w, &http.Cookie{
+			Name:   "oauth_state_" + provider,
+			Value:  "",
+			Path:   "/",
+			MaxAge: -1,
+		})
+	}
 
 	// Handle the callback and get user information
 	user, err := h.socialAuthService.HandleCallback(provider, code, state, tenantID)
