@@ -1,6 +1,12 @@
 # Production values for oauth2-server
 # This file contains production-ready configurations
 
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
 replicaCount: 3
 frontendReplicaCount: 2
 
@@ -10,6 +16,7 @@ image:
   repository: langazov/ims_authy-backend
   tag: "${IMAGE_TAG}"
   pullPolicy: IfNotPresent
+  pullSecrets: []
 
 frontend:
   image:
@@ -17,6 +24,11 @@ frontend:
     repository: langazov/ims_authy-frontend
     tag: "${IMAGE_TAG}"
     pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+    annotations: {}
   ingress:
     enabled: true
     className: "nginx"
@@ -61,28 +73,71 @@ ingress:
 
 # Frontend ingress is configured under the top-level `frontend.ingress` key above.
 
+# Service account
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
 
 # Production resource configuration
-# resources:
-#   limits:
-#     cpu: 1000m
-#     memory: 1Gi
-#   requests:
-#     cpu: 200m
-#     memory: 256Mi
-
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
 
 # Enable autoscaling
-# autoscaling:
-#   enabled: true
-#   minReplicas: 2
-#   maxReplicas: 10
-#   targetCPUUtilizationPercentage: 70
-#   targetMemoryUtilizationPercentage: 80
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
 
 # Production application configuration
 config:
-  jwtSecret: "production-jwt-secret-change-this-to-a-secure-value"
+  # Server configuration
+  port: 8080
+  jwtSecret: "Zrcnc0K2sDfVC2hu"
+  
+  # Database configuration
+  database:
+    name: oauth2_server
+    host: "ims-authy-mongodb"
+    port: 27017
+    username: oauth2user
+    password: UGsAoE7aZnVTgs9P
+    
+  # OAuth2 client configuration
   oauth2:
     clientId: "production-frontend-client"
     clientSecret: "production-oauth2-secret-change-this"
@@ -101,76 +156,126 @@ config:
       clientId: "your-github-client-id"
       clientSecret: "your-github-client-secret"
       redirectUrl: "https://${BACKEND_HOST}/auth/github/callback"
+    
+    facebook:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "https://${BACKEND_HOST}/auth/facebook/callback"
+      
+    apple:
+      clientId: ""
+      clientSecret: ""
+      redirectUrl: "https://${BACKEND_HOST}/auth/apple/callback"
+
+# Secrets configuration
+secrets:
+  # Existing secret name for JWT and OAuth secrets
+  existingSecret: ""
+  # Keys in the existing secret
+  jwtSecretKey: "jwt-secret"
+  clientSecretKey: "client-secret"
+  
+  # Social login secrets
+  socialSecrets:
+    existingSecret: ""
+    googleClientSecretKey: "google-client-secret"
+    githubClientSecretKey: "github-client-secret"
+    facebookClientSecretKey: "facebook-client-secret"
+    appleClientSecretKey: "apple-client-secret"
 
 # MongoDB production configuration
 mongodb:
   enabled: true
+  # Install MongoDB in the same namespace as the application
+  namespaceOverride: ""
+  fullnameOverride: "ims-authy-mongodb"
+  
   auth:
-    rootPassword: "secure-mongodb-password-change-this"
-  persistence:
     enabled: true
-    size: 50Gi
-    storageClass: "longhorn"
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-    requests:
-      cpu: 200m
-      memory: 512Mi
+    rootUsername: admin
+    rootPassword: "xMyEfnN4TJvHDU3p"
+    usernames:
+      - oauth2user
+    passwords:
+      - UGsAoE7aZnVTgs9P
+    databases:
+      - oauth2_server
+  
+  # persistence:
+  #   enabled: true
+  #   size: 10Gi
+  #   storageClass: "longhorn"
+  
+  # resources:
+  #   limits:
+  #     cpu: 1000m
+  #     memory: 2Gi
+  #   requests:
+  #     cpu: 200m
+  #     memory: 512Mi
+  
+  # Service account configuration for MongoDB
+  serviceAccount:
+    create: false
+    name: "ims-authy-mongodb"
+    annotations: {}
+  
+  # Network configuration
+  service:
+    type: ClusterIP
+    port: 27017
+    
+  # Security context
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+    
+  containerSecurityContext:
+    enabled: true
+    runAsUser: 1001
+    runAsNonRoot: true
+
+# External MongoDB configuration (if mongodb.enabled = false)
+externalMongodb:
+  host: localhost
+  port: 27017
+  database: oauth2_server
+  auth:
+    enabled: true
+    username: admin
+    password: password123
+    authSource: admin
+  # Existing secret for MongoDB credentials
+  existingSecret: ""
+  usernameKey: "username"
+  passwordKey: "password"
+
+# Persistent Volume configuration
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: "longhorn"
 
 # Enable pod disruption budget for high availability
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
+  # maxUnavailable: 1
+
+# Network policies
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
 
 # Enable monitoring
 serviceMonitor:
   enabled: true
   labels:
     release: prometheus
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
 
-# Security configurations
-# securityContext:
-#   capabilities:
-#     drop:
-#     - ALL
-#   readOnlyRootFilesystem: true
-#   runAsNonRoot: true
-#   runAsUser: 1000
 
-# podSecurityContext:
-#   fsGroup: 2000
-#   runAsNonRoot: true
-#   runAsUser: 1000
-
-# Node affinity for production workloads
-# affinity:
-#   podAntiAffinity:
-#     preferredDuringSchedulingIgnoredDuringExecution:
-#     - weight: 100
-#       podAffinityTerm:
-#         labelSelector:
-#           matchExpressions:
-#           - key: app.kubernetes.io/name
-#             operator: In
-#             values:
-#             - oauth2-server
-#         topologyKey: kubernetes.io/hostname
-
-# Use production storage class
-# persistence:
-#   enabled: true
-#   size: 5Gi
-#   storageClass: "longhorn"
-
-# Production tolerations (if needed)
-# tolerations:
-#   - key: "production"
-#     operator: "Equal"
-#     value: "true"
-#     effect: "NoSchedule"
-
-# # Node selector for production nodes
-# nodeSelector:
-#   environment: production
