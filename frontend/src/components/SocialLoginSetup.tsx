@@ -183,11 +183,16 @@ export default function SocialLoginSetup() {
     
     return {
       ...baseInstructions,
-      steps: baseInstructions.steps.map(step => 
-        step.includes('http://localhost:8080/auth/') 
-          ? step.replace(/http:\/\/localhost:8080\/auth\/\w+\/callback/, callbackUrl)
-          : step
-      )
+      steps: baseInstructions.steps.map(step => {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+        const authBaseUrl = `${apiBaseUrl}/auth/`;
+        const escapedUrl = authBaseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`${escapedUrl}\\w+\\/callback`, 'g');
+        
+        return step.includes(authBaseUrl) 
+          ? step.replace(regex, callbackUrl)
+          : step;
+      })
     }
   }
 

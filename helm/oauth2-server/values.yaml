@@ -149,31 +149,31 @@ config:
   oauth2:
     clientId: "frontend-client"
     clientSecret: "oauth2-secret"
-    redirectUrl: "http://localhost:80/callback"
-    authServerUrl: "http://localhost:8080/oauth/authorize"
-    tokenServerUrl: "http://localhost:8080/oauth/token"
+    redirectUrl: "https://authy.imsc.eu/callback"
+    authServerUrl: "https://oauth2.imsc.eu/oauth/authorize"
+    tokenServerUrl: "https://oauth2.imsc.eu/oauth/token"
 
   # Social login providers (optional)
   socialLogin:
     google:
       clientId: ""
       clientSecret: ""
-      redirectUrl: "http://localhost:8080/auth/google/callback"
+      redirectUrl: "https://oauth2.imsc.eu/auth/google/callback"
     
     github:
       clientId: ""
       clientSecret: ""
-      redirectUrl: "http://localhost:8080/auth/github/callback"
+      redirectUrl: "https://oauth2.imsc.eu/auth/github/callback"
       
     facebook:
       clientId: ""
       clientSecret: ""
-      redirectUrl: "http://localhost:8080/auth/facebook/callback"
+      redirectUrl: "https://oauth2.imsc.eu/auth/facebook/callback"
       
     apple:
       clientId: ""
       clientSecret: ""
-      redirectUrl: "http://localhost:8080/auth/apple/callback"
+      redirectUrl: "https://oauth2.imsc.eu/auth/apple/callback"
 
 # Secrets configuration
 secrets:
