@@ -7,21 +7,21 @@ frontendReplicaCount: 2
 # Production images (update with your registry)
 image:
   registry: docker.io
-  repository: ims_authy-backend
+  repository: langazov/ims_authy-backend
   tag: "${IMAGE_TAG}"
   pullPolicy: IfNotPresent
 
 frontend:
   image:
     registry: docker.io
-    repository: ims_authy-frontend
+    repository: langazov/ims_authy-frontend
     tag: "${IMAGE_TAG}"
     pullPolicy: IfNotPresent
   ingress:
     enabled: true
     className: "nginx"
     annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
+      cert-manager.io/cluster-issuer: letsencrypt-production
       nginx.ingress.kubernetes.io/ssl-redirect: "true"
     hosts:
       - host: ${FRONTEND_HOST}
@@ -44,7 +44,7 @@ ingress:
     nginx.ingress.kubernetes.io/cors-expose-headers: X-Custom-Header
     nginx.ingress.kubernetes.io/cors-max-age: "86400"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/cluster-issuer: letsencrypt-production
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     acme.cert-manager.io/http01-edit-in-place: "true"
@@ -110,7 +110,7 @@ mongodb:
   persistence:
     enabled: true
     size: 50Gi
-    storageClass: "fast-ssd"
+    storageClass: "longhorn"
   resources:
     limits:
       cpu: 1000m
@@ -162,7 +162,7 @@ podSecurityContext:
 # persistence:
 #   enabled: true
 #   size: 5Gi
-#   storageClass: "fast-ssd"
+#   storageClass: "longhorn"
 
 # Production tolerations (if needed)
 tolerations:
