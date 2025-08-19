@@ -63,22 +63,22 @@ ingress:
 
 
 # Production resource configuration
-resources:
-  limits:
-    cpu: 1000m
-    memory: 1Gi
-  requests:
-    cpu: 200m
-    memory: 256Mi
+# resources:
+#   limits:
+#     cpu: 1000m
+#     memory: 1Gi
+#   requests:
+#     cpu: 200m
+#     memory: 256Mi
 
 
 # Enable autoscaling
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70
-  targetMemoryUtilizationPercentage: 80
+# autoscaling:
+#   enabled: true
+#   minReplicas: 2
+#   maxReplicas: 10
+#   targetCPUUtilizationPercentage: 70
+#   targetMemoryUtilizationPercentage: 80
 
 # Production application configuration
 config:
@@ -131,18 +131,18 @@ serviceMonitor:
     release: prometheus
 
 # Security configurations
-securityContext:
-  capabilities:
-    drop:
-    - ALL
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: 1000
+# securityContext:
+#   capabilities:
+#     drop:
+#     - ALL
+#   readOnlyRootFilesystem: true
+#   runAsNonRoot: true
+#   runAsUser: 1000
 
-podSecurityContext:
-  fsGroup: 2000
-  runAsNonRoot: true
-  runAsUser: 1000
+# podSecurityContext:
+#   fsGroup: 2000
+#   runAsNonRoot: true
+#   runAsUser: 1000
 
 # Node affinity for production workloads
 # affinity:
@@ -165,12 +165,12 @@ podSecurityContext:
 #   storageClass: "longhorn"
 
 # Production tolerations (if needed)
-tolerations:
-  - key: "production"
-    operator: "Equal"
-    value: "true"
-    effect: "NoSchedule"
+# tolerations:
+#   - key: "production"
+#     operator: "Equal"
+#     value: "true"
+#     effect: "NoSchedule"
 
-# Node selector for production nodes
-nodeSelector:
-  environment: production
+# # Node selector for production nodes
+# nodeSelector:
+#   environment: production
