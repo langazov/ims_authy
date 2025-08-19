@@ -99,10 +99,18 @@ class AuthService {
   }
 
   async handleCallback(code: string, state: string): Promise<User> {
-    // Check if we're already authenticated (prevents duplicate processing)
-    if (this.isAuthenticated()) {
+    // For direct social login, always process the callback even if we have existing tokens
+    // This ensures we get fresh tokens from the social login flow
+    if (state !== 'direct-social-login' && this.isAuthenticated()) {
       console.info('[auth] handleCallback - already authenticated, returning current user')
       return this.getCurrentUser()
+    }
+    
+    // Clear any existing tokens for direct social login to prevent conflicts
+    if (state === 'direct-social-login') {
+      console.info('[auth] handleCallback - processing direct social login, clearing existing tokens')
+      localStorage.removeItem(this.STORAGE_KEY)
+      localStorage.removeItem('direct_login_user')
     }
 
     const storedState = localStorage.getItem('oauth_state')
