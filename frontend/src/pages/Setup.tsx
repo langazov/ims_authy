@@ -68,7 +68,8 @@ export default function Setup() {
 
   const checkSetupStatus = async () => {
     try {
-      const response = await fetch('/api/setup/status')
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'
+      const response = await fetch(`${API_BASE}/api/setup/status`)
       const status = await response.json()
       setSetupStatus(status)
       
@@ -95,7 +96,8 @@ export default function Setup() {
     }
 
     try {
-      const response = await fetch('/api/setup/validate-token', {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'
+      const response = await fetch(`${API_BASE}/api/setup/validate-token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +129,8 @@ export default function Setup() {
         setupData.settings.custom_branding.company_name = setupData.tenant_name
       }
 
-      const response = await fetch('/api/setup/complete', {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'
+      const response = await fetch(`${API_BASE}/api/setup/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
