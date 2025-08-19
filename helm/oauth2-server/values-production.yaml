@@ -99,7 +99,7 @@ resources:
 # Enable autoscaling
 autoscaling:
   enabled: true
-  minReplicas: 2
+  minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
@@ -129,7 +129,7 @@ config:
   port: 8080
   jwtSecret: "Zrcnc0K2sDfVC2hu"
   # Force setup mode (set to "true" to force setup wizard)
-  forceSetup: false
+  forceSetup: true
   
   # Database configuration
   database:
