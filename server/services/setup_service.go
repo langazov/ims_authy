@@ -24,6 +24,7 @@ type SetupService struct {
 	scopeService          *ScopeService
 	groupService          *GroupService
 	socialProviderService *SocialProviderService
+	clientService         *ClientService
 	setupToken            string
 	setupTokenExpiry      time.Time
 }
@@ -47,6 +48,7 @@ func NewSetupService(
 	scopeService *ScopeService,
 	groupService *GroupService,
 	socialProviderService *SocialProviderService,
+	clientService *ClientService,
 ) *SetupService {
 	return &SetupService{
 		db:                    db,
@@ -55,6 +57,7 @@ func NewSetupService(
 		scopeService:          scopeService,
 		groupService:          groupService,
 		socialProviderService: socialProviderService,
+		clientService:         clientService,
 	}
 }
 
@@ -193,12 +196,19 @@ func (s *SetupService) PerformInitialSetup(req *SetupRequest) error {
 		log.Printf("Initialized default social providers for tenant: %s", tenantID)
 	}
 
-	// Step 5: Create default admin user
+	// Step 5: Initialize default OAuth clients with domain-based redirect URIs
+	if err := s.initializeDefaultClients(tenantID, req.TenantDomain); err != nil {
+		log.Printf("Warning: Failed to initialize default OAuth clients: %v", err)
+	} else {
+		log.Printf("Initialized default OAuth clients for tenant: %s", tenantID)
+	}
+
+	// Step 6: Create default admin user
 	if err := s.createDefaultAdminUser(tenantID, req); err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}
 
-	// Step 6: Clear the setup token so it can't be used again
+	// Step 7: Clear the setup token so it can't be used again
 	s.setupToken = ""
 	s.setupTokenExpiry = time.Time{}
 
@@ -249,4 +259,82 @@ func (s *SetupService) GetSetupStatus() map[string]interface{} {
 	}
 
 	return status
+}
+
+func (s *SetupService) initializeDefaultClients(tenantID, domain string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Check if any clients exist for this tenant
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	count, err := s.db.GetCollection("clients").CountDocuments(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	// If clients already exist, skip initialization
+	if count > 0 {
+		return nil
+	}
+
+	// Build redirect URIs using the provided domain
+	var redirectURIs []string
+	if domain != "" {
+		redirectURIs = []string{
+			fmt.Sprintf("https://%s/callback", domain),
+			fmt.Sprintf("https://%s/auth/callback", domain),
+			"http://localhost:3000/callback", // Development fallback
+		}
+	} else {
+		redirectURIs = []string{
+			"http://localhost:3000/callback",
+			"https://authy.imsc.eu/callback",
+			"https://authy.imsc.eu/auth/callback",
+		}
+	}
+
+	// Create default frontend client for social login and PKCE flows
+	frontendClient := &models.Client{
+		TenantID:     tenantID,
+		ClientID:     "frontend-client",
+		ClientSecret: "frontend-secret",
+		Name:         "Frontend Client",
+		Description:  "Default frontend client for social login and PKCE flows",
+		RedirectURIs: redirectURIs,
+		Scopes:       []string{"read", "write", "openid", "profile", "email"},
+		GrantTypes:   []string{"authorization_code", "refresh_token"},
+		Active:       true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Create default test client for development
+	testClient := &models.Client{
+		TenantID:     tenantID,
+		ClientID:     "test-client-id",
+		ClientSecret: "test-client-secret",
+		Name:         "Test OAuth2 Client",
+		Description:  "Default test client for development",
+		RedirectURIs: append(redirectURIs, "https://oauth.pstmn.io/v1/callback"),
+		Scopes:       []string{"read", "write", "openid", "profile", "email"},
+		GrantTypes:   []string{"authorization_code", "refresh_token"},
+		Active:       true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Use the client service to create the clients (which will generate proper IDs)
+	if err := s.clientService.CreateClient(frontendClient); err != nil {
+		return fmt.Errorf("failed to create frontend client: %w", err)
+	}
+
+	if err := s.clientService.CreateClient(testClient); err != nil {
+		return fmt.Errorf("failed to create test client: %w", err)
+	}
+
+	return nil
 }

@@ -101,7 +101,7 @@ func main() {
 	socialProviderService := services.NewSocialProviderService(db)
 
 	// Create setup service
-	setupService := services.NewSetupService(db, tenantService, userService, scopeService, groupService, socialProviderService)
+	setupService := services.NewSetupService(db, tenantService, userService, scopeService, groupService, socialProviderService, clientService)
 
 	// Check if initial setup is required
 	setupRequired, err := setupService.IsSetupRequired()
