@@ -76,6 +76,22 @@ func (s *TenantService) GetTenantByID(tenantID string) (*models.Tenant, error) {
 	return &tenant, nil
 }
 
+func (s *TenantService) GetDefaultTenant() (*models.Tenant, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var tenant models.Tenant
+	err := s.tenantCollection.FindOne(ctx, bson.M{"is_default": true, "active": true}).Decode(&tenant)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, errors.New("default tenant not found")
+		}
+		return nil, err
+	}
+
+	return &tenant, nil
+}
+
 func (s *TenantService) GetTenantByDomain(domain string) (*models.Tenant, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -213,6 +229,7 @@ func (s *TenantService) InitializeDefaultTenant() error {
 		Domain:    "localhost",
 		Subdomain: "default",
 		Active:    true,
+		IsDefault: true,
 		Settings: models.TenantSettings{
 			AllowUserRegistration: true,
 			RequireTwoFactor:      false,
@@ -226,6 +243,51 @@ func (s *TenantService) InitializeDefaultTenant() error {
 	}
 
 	return s.CreateTenant(defaultTenant)
+}
+
+// SetDefaultTenant marks a tenant as default and ensures no other tenant is marked as default
+func (s *TenantService) SetDefaultTenant(tenantID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Start a transaction to ensure atomicity
+	session, err := s.db.Client.StartSession()
+	if err != nil {
+		return err
+	}
+	defer session.EndSession(ctx)
+
+	callback := func(sc mongo.SessionContext) (interface{}, error) {
+		// First, remove default flag from all tenants
+		_, err := s.tenantCollection.UpdateMany(sc, bson.M{}, bson.M{
+			"$set": bson.M{"is_default": false, "updated_at": time.Now()},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Then, set the specified tenant as default
+		objID, err := primitive.ObjectIDFromHex(tenantID)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := s.tenantCollection.UpdateOne(sc, bson.M{"_id": objID}, bson.M{
+			"$set": bson.M{"is_default": true, "updated_at": time.Now()},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		if result.MatchedCount == 0 {
+			return nil, errors.New("tenant not found")
+		}
+
+		return nil, nil
+	}
+
+	_, err = session.WithTransaction(ctx, callback)
+	return err
 }
 
 // ResolveTenantFromRequest resolves tenant from HTTP request headers or subdomain

@@ -260,6 +260,7 @@ class AuthService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Tenant-ID': 'default',
         },
         body: JSON.stringify({
           email,

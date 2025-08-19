@@ -52,9 +52,9 @@ func TenantMiddleware(tenantService *services.TenantService) func(http.Handler) 
 				}
 			}
 
-			// If no tenant found, try to get default tenant
+			// If no tenant found, try to get default tenant using isDefault flag
 			if tenantID == "" {
-				defaultTenant, err := tenantService.GetTenantBySubdomain("default")
+				defaultTenant, err := tenantService.GetDefaultTenant()
 				if err == nil && defaultTenant != nil {
 					tenantID = defaultTenant.ID.Hex()
 				}

@@ -12,6 +12,7 @@ type Tenant struct {
 	Domain      string             `bson:"domain" json:"domain"` // e.g., "acme.com" or "tenant1"
 	Subdomain   string             `bson:"subdomain" json:"subdomain"` // e.g., "acme" for "acme.auth-server.com"
 	Active      bool               `bson:"active" json:"active"`
+	IsDefault   bool               `bson:"is_default" json:"is_default"` // Flag to mark the default tenant
 	Settings    TenantSettings     `bson:"settings" json:"settings"`
 	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
 	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`

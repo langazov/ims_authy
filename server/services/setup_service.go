@@ -156,6 +156,7 @@ func (s *SetupService) PerformInitialSetup(req *SetupRequest) error {
 		Domain:    req.TenantDomain,
 		Subdomain: req.TenantSubdomain,
 		Active:    true,
+		IsDefault: true, // Mark as default tenant during setup
 		Settings:  req.Settings,
 	}
 
@@ -165,6 +166,11 @@ func (s *SetupService) PerformInitialSetup(req *SetupRequest) error {
 
 	tenantID := tenant.ID.Hex()
 	log.Printf("Created tenant: %s (ID: %s)", tenant.Name, tenantID)
+
+	// Ensure this tenant is marked as the default
+	if err := s.tenantService.SetDefaultTenant(tenantID); err != nil {
+		log.Printf("Warning: Failed to set tenant as default: %v", err)
+	}
 
 	// Step 2: Initialize default scopes
 	if err := s.scopeService.InitializeDefaultScopes(tenantID); err != nil {
