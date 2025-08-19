@@ -55,8 +55,15 @@ func TenantMiddleware(tenantService *services.TenantService) func(http.Handler) 
 			// If no tenant found, try to get default tenant using isDefault flag
 			if tenantID == "" {
 				defaultTenant, err := tenantService.GetDefaultTenant()
+				if err != nil {
+					// Log the error but continue - this helps with debugging
+					println("Warning: Failed to get default tenant:", err.Error())
+				}
 				if err == nil && defaultTenant != nil {
 					tenantID = defaultTenant.ID.Hex()
+					println("Using default tenant:", defaultTenant.Name, "ID:", tenantID)
+				} else {
+					println("No default tenant found, request will fail")
 				}
 			}
 
