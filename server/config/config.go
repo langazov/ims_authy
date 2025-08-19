@@ -24,6 +24,7 @@ type Config struct {
 	RedirectURL    string
 	AuthServerURL  string
 	TokenServerURL string
+	WebBaseURL     string // Frontend/web application base URL
 
 	// Social login providers
 	Google   SocialProvider
@@ -45,6 +46,7 @@ func Load() (*Config, error) {
 		RedirectURL:    getEnv("REDIRECT_URL", "https://oauth2.imsc.eu/callback"),
 		AuthServerURL:  getEnv("AUTH_SERVER_URL", "https://oauth2.imsc.eu/oauth/authorize"),
 		TokenServerURL: getEnv("TOKEN_SERVER_URL", "https://oauth2.imsc.eu/oauth/token"),
+		WebBaseURL:     getEnv("WEB_BASE_URL", "https://authy.imsc.eu"),
 
 		// Social login providers configuration
 		Google: SocialProvider{

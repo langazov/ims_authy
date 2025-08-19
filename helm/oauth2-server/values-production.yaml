@@ -131,6 +131,8 @@ config:
   jwtSecret: "Zrcnc0K2sDfVC2hu"
   # Force setup mode (set to "true" to force setup wizard)
   forceSetup: false
+  # Frontend/web application base URL
+  webBaseUrl: "https://authy.imsc.eu"
   
   # Database configuration
   database:

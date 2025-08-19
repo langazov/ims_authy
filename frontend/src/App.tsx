@@ -49,6 +49,11 @@ function AppContent() {
     return <CallbackPage />
   }
 
+  // Handle OAuth callback parameters on /login (for backward compatibility)
+  if (window.location.pathname === '/login' && window.location.search.includes('code=')) {
+    return <CallbackPage />
+  }
+
   // Handle setup URL even when setup is not required (redirect to login)
   if (window.location.pathname === '/setup') {
     window.location.href = '/'

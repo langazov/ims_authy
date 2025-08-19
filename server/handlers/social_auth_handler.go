@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"oauth2-openid-server/config"
 	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 
@@ -18,17 +19,19 @@ type SocialAuthHandler struct {
 	socialAuthService     *services.SocialAuthService
 	socialProviderService *services.SocialProviderService
 	oauthService          *services.OAuthService
+	config                *config.Config
 }
 
 type SocialProvidersResponse struct {
 	Providers []string `json:"providers"`
 }
 
-func NewSocialAuthHandler(socialAuthService *services.SocialAuthService, socialProviderService *services.SocialProviderService, oauthService *services.OAuthService) *SocialAuthHandler {
+func NewSocialAuthHandler(socialAuthService *services.SocialAuthService, socialProviderService *services.SocialProviderService, oauthService *services.OAuthService, cfg *config.Config) *SocialAuthHandler {
 	return &SocialAuthHandler{
 		socialAuthService:     socialAuthService,
 		socialProviderService: socialProviderService,
 		oauthService:          oauthService,
+		config:                cfg,
 	}
 }
 
@@ -207,7 +210,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 	// Direct social login without OAuth flow - create temporary auth code for frontend
 	// Generate a temporary authorization code that the frontend can exchange for tokens
 	tempClientID := "direct-social-login"
-	tempRedirectURI := "http://localhost/login" // Frontend login page
+	tempRedirectURI := h.config.WebBaseURL + "/callback" // Frontend callback page
 	tempScopes := []string{"read", "openid", "profile", "email"}
 
 	authCode, err := h.oauthService.CreateAuthorizationCode(
@@ -225,8 +228,8 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 	}
 
 	// Redirect to frontend with the authorization code
-	redirectURL := fmt.Sprintf("https://authy.imsc.eu/login?code=%s&provider=%s&tenant_id=%s",
-		authCode, provider, tenantID)
+	redirectURL := fmt.Sprintf("%s/callback?code=%s&provider=%s&tenant_id=%s",
+		h.config.WebBaseURL, authCode, provider, tenantID)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }

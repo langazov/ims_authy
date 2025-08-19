@@ -110,7 +110,7 @@ func main() {
 	clientHandler := handlers.NewClientHandler(clientService)
 	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
-	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService)
+	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService, cfg)
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
 	setupHandler := handlers.NewSetupHandler(setupService)
 

@@ -145,6 +145,8 @@ config:
   jwtSecret: "your-super-secret-jwt-key-change-this-in-production"
   # Force setup mode (set to "true" to force setup wizard)
   forceSetup: false
+  # Frontend/web application base URL
+  webBaseUrl: "https://authy.imsc.eu"
   
   # Database configuration
   database:
