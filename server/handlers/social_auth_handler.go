@@ -52,7 +52,7 @@ func (h *SocialAuthHandler) GetProviders(w http.ResponseWriter, r *http.Request)
 	json.NewEncoder(w).Encode(response)
 }
 
-// InitiateSocialLogin starts the social login process
+// InitiateSocialLogin starts the social login process with PKCE support
 func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -63,10 +63,49 @@ func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.R
 	provider := vars["provider"]
 	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	// Generate a random state parameter for security
-	state := h.generateState()
+	// Get OAuth parameters from frontend (if using PKCE)
+	clientID := r.URL.Query().Get("client_id")
+	redirectURI := r.URL.Query().Get("redirect_uri")
+	scope := r.URL.Query().Get("scope")
+	frontendState := r.URL.Query().Get("state")
+	codeChallenge := r.URL.Query().Get("code_challenge")
+	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
-	// Store state in session/cookie for validation (simplified approach)
+	var state string
+	
+	// If frontend provides state and PKCE parameters, use PKCE flow
+	if frontendState != "" && codeChallenge != "" && clientID != "" && redirectURI != "" {
+		// Use frontend-provided state for PKCE flow
+		state = frontendState
+		
+		// Store OAuth parameters for callback processing
+		params := map[string]string{
+			"original_state":        frontendState,
+			"client_id":             clientID,
+			"redirect_uri":          redirectURI,
+			"scope":                 scope,
+			"code_challenge":        codeChallenge,
+			"code_challenge_method": codeChallengeMethod,
+		}
+
+		paramsJSON, _ := json.Marshal(params)
+		http.SetCookie(w, &http.Cookie{
+			Name:     "oauth_params_" + provider,
+			Value:    base64.URLEncoding.EncodeToString(paramsJSON),
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false, // Set to true in production with HTTPS
+			MaxAge:   600,   // 10 minutes
+		})
+
+		println("Social login with PKCE - storing OAuth params for", provider)
+	} else {
+		// Generate a random state for direct social login
+		state = h.generateState()
+		println("Direct social login - generated state for", provider)
+	}
+
+	// Store state in session/cookie for validation
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state_" + provider,
 		Value:    state,

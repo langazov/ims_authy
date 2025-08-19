@@ -19,9 +19,15 @@ type AuthHandler struct {
 }
 
 type LoginRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	TwoFACode string `json:"two_fa_code,omitempty"`
+	Email                 string `json:"email"`
+	Password              string `json:"password"`
+	TwoFACode             string `json:"two_fa_code,omitempty"`
+	// OAuth PKCE parameters for secure authentication
+	ClientID              string `json:"client_id,omitempty"`
+	RedirectURI           string `json:"redirect_uri,omitempty"`
+	CodeChallenge         string `json:"code_challenge,omitempty"`
+	CodeChallengeMethod   string `json:"code_challenge_method,omitempty"`
+	State                 string `json:"state,omitempty"`
 }
 
 type AuthorizeRequest struct {
@@ -104,7 +110,44 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate OAuth tokens for successful login
+	// Check if PKCE parameters are provided for secure OAuth flow
+	if loginReq.ClientID != "" && loginReq.RedirectURI != "" && loginReq.CodeChallenge != "" {
+		// Use PKCE OAuth flow - generate authorization code
+		scopes := []string{"read", "openid", "profile", "email"}
+		if len(user.Scopes) > 0 {
+			scopes = user.Scopes // Use user's actual scopes
+		}
+
+		authCode, err := h.oauthService.CreateAuthorizationCode(
+			loginReq.ClientID,
+			user.ID.Hex(),
+			tenantID,
+			loginReq.RedirectURI,
+			scopes,
+			loginReq.CodeChallenge,
+			loginReq.CodeChallengeMethod,
+		)
+		if err != nil {
+			http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"user_id": user.ID.Hex(),
+			"email":   user.Email,
+			"scopes":  user.Scopes,
+			"groups":  user.Groups,
+			"two_factor_verified": twoFactorRequired,
+			"code":    authCode,  // Return authorization code for PKCE flow
+			"state":   loginReq.State,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Fallback: Generate OAuth tokens for backward compatibility
 	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), tenantID, user.Scopes)
 	if err != nil {
 		http.Error(w, "Failed to generate authentication tokens", http.StatusInternalServerError)

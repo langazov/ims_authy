@@ -110,9 +110,9 @@ class AuthService {
     if (state === 'direct-social-login') {
       console.info('[auth] handleCallback - processing direct social login, clearing existing tokens')
       localStorage.removeItem(this.STORAGE_KEY)
-      localStorage.removeItem('direct_login_user')
       localStorage.removeItem(this.CODE_VERIFIER_KEY)
       localStorage.removeItem('oauth_state')
+      // No longer using direct_login_user - all authentication via OAuth tokens
     }
 
     const storedState = localStorage.getItem('oauth_state')
@@ -161,7 +161,12 @@ class AuthService {
     console.debug('[auth] exchanging code for tokens', { tokenUrl })
     const response = await fetch(tokenUrl, {
       method: 'POST',
-      body: tokenData
+      headers: {
+        'Accept': 'application/json',
+      },
+      body: tokenData,
+      credentials: 'include',
+      mode: 'cors'
     })
 
     if (!response.ok) {
@@ -193,13 +198,7 @@ class AuthService {
       }
     }
 
-    // Fallback to direct login user data
-    const directUser = localStorage.getItem('direct_login_user')
-    if (directUser) {
-      return JSON.parse(directUser)
-    }
-
-    throw new Error('No authentication data available')
+    throw new Error('No authentication data available - OAuth tokens required')
   }
 
   async refreshCurrentUser(): Promise<User> {
@@ -265,16 +264,24 @@ class AuthService {
       return true
     }
 
-    // Fallback to direct login user
-    const directUser = localStorage.getItem('direct_login_user')
-    return !!directUser
+    // Only use OAuth tokens for authentication - no fallback to direct_login_user
+    return false
   }
 
   async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
     try {
-      // Always use legacy direct login URL (no tenant-specific routing)
-      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      // Use PKCE OAuth flow for secure authentication
+      const codeVerifier = this.generateCodeVerifier()
+      const codeChallenge = await this.generateCodeChallenge(codeVerifier)
+      const state = crypto.randomUUID()
 
+      // Store PKCE parameters for callback processing
+      localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
+      localStorage.setItem('oauth_state', state)
+
+      // Step 1: Authenticate with credentials and get authorization code
+      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
@@ -284,6 +291,12 @@ class AuthService {
           email,
           password,
           two_fa_code: twoFACode,
+          // Include OAuth parameters for PKCE flow
+          client_id: config.oauth.clientId,
+          redirect_uri: config.oauth.redirectUri,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          state: state,
         }),
       })
 
@@ -298,22 +311,35 @@ class AuthService {
         return { success: false, twoFactorRequired: true }
       }
 
-      // Store OAuth tokens if they were provided
-      if (data.tokens) {
-        this.storeTokens(data.tokens)
-        // Remove any existing direct login user data
-        localStorage.removeItem('direct_login_user')
+      // If backend returns an authorization code, exchange it for tokens
+      if (data.code) {
+        console.info('[auth] directLogin - received authorization code, exchanging for tokens')
+        try {
+          const user = await this.handleCallback(data.code, state)
+          return { success: true, user }
+        } catch (error) {
+          console.error('[auth] directLogin - token exchange failed:', error)
+          return { success: false, error: 'Token exchange failed' }
+        }
       }
 
-      const user: User = {
-        id: data.user_id,
-        email: data.email,
-        scopes: data.scopes || [],
-        groups: data.groups || [],
-        two_factor_verified: data.two_factor_verified || false,
+      // Fallback: if backend returns tokens directly (backward compatibility)
+      if (data.tokens) {
+        console.info('[auth] directLogin - received tokens directly')
+        this.storeTokens(data.tokens)
+        
+        const user: User = {
+          id: data.user_id,
+          email: data.email,
+          scopes: data.scopes || [],
+          groups: data.groups || [],
+          two_factor_verified: data.two_factor_verified || false,
+        }
+        
+        return { success: true, user }
       }
-      
-      return { success: true, user }
+
+      return { success: false, error: 'Invalid response from server' }
     } catch (error) {
       console.error('[auth] directLogin failed:', error)
       return { success: false, error: 'Login failed' }
@@ -321,11 +347,11 @@ class AuthService {
   }
 
   logout(): void {
-  console.info('[auth] logout')
-  localStorage.removeItem(this.STORAGE_KEY)
-  localStorage.removeItem(this.CODE_VERIFIER_KEY)
-  localStorage.removeItem('oauth_state')
-  localStorage.removeItem('direct_login_user')
+    console.info('[auth] logout')
+    localStorage.removeItem(this.STORAGE_KEY)
+    localStorage.removeItem(this.CODE_VERIFIER_KEY)
+    localStorage.removeItem('oauth_state')
+    // No longer using direct_login_user - all authentication via OAuth tokens
   }
 
   async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
