@@ -73,9 +73,9 @@ docker-compose up -d
 ```
 
 4. The services will be available at:
-   - OAuth2 Server: http://localhost:8080
+   - OAuth2 Server: https://oauth2.imsc.eu
    - MongoDB: localhost:27017
-   - MongoDB Express (optional): http://localhost:8081
+   - MongoDB Express (optional): https://authy.imsc.eu81
 
 5. Default credentials:
    - Admin user: `admin@oauth2server.local` / `admin123`
@@ -123,7 +123,7 @@ Environment variables:
 
 ### Create a User
 ```bash
-curl -X POST http://localhost:8080/api/v1/users \
+curl -X POST https://oauth2.imsc.eu/api/v1/users \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -140,14 +140,14 @@ curl -X POST http://localhost:8080/api/v1/users \
 
 1. Direct user to authorization URL:
 ```
-http://localhost:8080/oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=http://localhost:3000/callback&scope=read&state=xyz
+https://oauth2.imsc.eu/oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=http://localhost:3000/callback&scope=read&state=xyz
 ```
 
 2. User logs in and authorizes, gets redirected with code
 
 3. Exchange code for tokens:
 ```bash
-curl -X POST http://localhost:8080/oauth/token \
+curl -X POST https://oauth2.imsc.eu/oauth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "grant_type=authorization_code&code=AUTHORIZATION_CODE&client_id=oauth2-client&client_secret=oauth2-secret&redirect_uri=http://localhost:3000/callback"
 ```

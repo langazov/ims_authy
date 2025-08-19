@@ -13,7 +13,7 @@ This is a demonstration application showing how to use the IMS Angular Authentic
 
 ## Server Integration
 
-The demo is configured to work with your OAuth2 server running on `http://localhost:8080`. The following endpoints are used:
+The demo is configured to work with your OAuth2 server running on `https://oauth2.imsc.eu`. The following endpoints are used:
 
 - `POST /tenant/{tenantId}/login` - User authentication
 - `POST /2fa/setup` - Initialize 2FA setup
@@ -47,7 +47,7 @@ The demo shows how to:
 \`\`\`typescript
 // Configure the auth service with your server URL
 this.authService.configure({
-  serverUrl: 'http://localhost:8080',
+  serverUrl: 'https://oauth2.imsc.eu',
   tenantId: 'default'
 });
 \`\`\`
@@ -105,7 +105,7 @@ if (this.authService.hasGroup('administrators')) {
 
 ### Prerequisites
 
-1. Your OAuth2 server must be running on `http://localhost:8080`
+1. Your OAuth2 server must be running on `https://oauth2.imsc.eu`
 2. Create a demo user in your database with the credentials above
 3. Node.js and npm installed
 

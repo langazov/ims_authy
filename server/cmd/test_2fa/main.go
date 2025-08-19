@@ -78,12 +78,12 @@ func main() {
 		fmt.Println("\nTo enable 2FA:")
 		fmt.Println("1. Scan the QR code with your authenticator app")
 		fmt.Println("2. Use the API endpoint POST /api/v1/2fa/enable with the generated code")
-		fmt.Printf("   curl -X POST http://localhost:8080/api/v1/2fa/enable -H \"Content-Type: application/json\" -d '{\"user_id\":\"%s\",\"code\":\"YOUR_6_DIGIT_CODE\"}'\n", user.ID.Hex())
+		fmt.Printf("   curl -X POST https://oauth2.imsc.eu/api/v1/2fa/enable -H \"Content-Type: application/json\" -d '{\"user_id\":\"%s\",\"code\":\"YOUR_6_DIGIT_CODE\"}'\n", user.ID.Hex())
 
 	} else {
 		fmt.Printf("Test user already exists: %s\n", testEmail)
 		fmt.Printf("User ID: %s\n", existingUser.ID.Hex())
-		
+
 		// Check 2FA status
 		required, err := twoFactorService.IsTwoFactorRequired(existingUser.ID.Hex())
 		if err != nil {
@@ -94,7 +94,7 @@ func main() {
 
 		if !required {
 			fmt.Println("\nTo setup 2FA for this user, use:")
-			fmt.Printf("curl -X POST http://localhost:8080/api/v1/2fa/setup -H \"Content-Type: application/json\" -d '{\"user_id\":\"%s\"}'\n", existingUser.ID.Hex())
+			fmt.Printf("curl -X POST https://oauth2.imsc.eu/api/v1/2fa/setup -H \"Content-Type: application/json\" -d '{\"user_id\":\"%s\"}'\n", existingUser.ID.Hex())
 		}
 	}
 

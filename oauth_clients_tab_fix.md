@@ -28,7 +28,7 @@ The OAuth Clients tab was not working and not showing available OAuth clients fr
 useEffect(() => {
   const fetchClients = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/clients')
+      const response = await fetch('https://oauth2.imsc.eu/api/v1/clients')
       if (response.ok) {
         const fetchedClients = await response.json()
         setClients(fetchedClients)
@@ -103,7 +103,7 @@ client.created_at       // instead of client.createdAt
 
 ### **Backend API Test:**
 ```bash
-curl http://localhost:8080/api/v1/clients
+curl https://oauth2.imsc.eu/api/v1/clients
 ```
 
 **Response (1 existing client):**
@@ -114,7 +114,7 @@ curl http://localhost:8080/api/v1/clients
     "client_id": "frontend-client",
     "name": "Test OAuth2 Client",
     "description": "Default test client for development",
-    "redirect_uris": ["http://localhost:80/callback"],
+    "redirect_uris": ["https://authy.imsc.eu/callback"],
     "scopes": ["read", "write", "openid", "profile", "email", "admin"],
     "grant_types": ["authorization_code", "refresh_token"],
     "active": true,
@@ -158,7 +158,7 @@ These features were disabled to focus on getting the display functionality worki
 
 ## 🔗 **Access:**
 - **Frontend**: http://localhost:5173/ → Sign in → "OAuth Clients" tab
-- **Backend API**: http://localhost:8080/api/v1/clients
+- **Backend API**: https://oauth2.imsc.eu/api/v1/clients
 
 The OAuth Clients tab is now functional and correctly displays the available OAuth clients from the database!
 

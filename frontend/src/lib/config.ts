@@ -1,10 +1,10 @@
 export const config = {
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu',
   oauth: {
     clientId: import.meta.env.VITE_OAUTH_CLIENT_ID || 'frontend-client',
-    redirectUri: import.meta.env.VITE_OAUTH_REDIRECT_URI || 'http://localhost:80/callback',
-    authUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/oauth/authorize`,
-    tokenUrl: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/oauth/token`,
+    redirectUri: import.meta.env.VITE_OAUTH_REDIRECT_URI || 'https://authy.imsc.eu/callback',
+    authUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/oauth/authorize`,
+    tokenUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/oauth/token`,
     scope: 'openid profile email admin'
   },
   social: {

@@ -61,7 +61,7 @@ The frontend 2FA implementation is complete and fully functional! Here's what ha
 ### For End Users:
 
 1. **Login Process:**
-   - Visit http://localhost:80
+   - Visit https://authy.imsc.eu
    - Enter email and password
    - If 2FA is enabled, enter 6-digit code from authenticator app
    - Successfully authenticated!
@@ -148,4 +148,4 @@ The 2FA frontend implementation is:
 - **User-friendly**: Intuitive and accessible design
 - **Maintainable**: Clean, well-structured code
 
-Visit http://localhost:80 to see the complete 2FA implementation in action!
+Visit https://authy.imsc.eu to see the complete 2FA implementation in action!

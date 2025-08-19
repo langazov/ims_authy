@@ -102,7 +102,7 @@ echo "Creating frontend OAuth2 client..."
 sleep 2
 
 # Create a test admin user first
-curl -X POST http://localhost:8080/api/v1/users \
+curl -X POST https://oauth2.imsc.eu/api/v1/users \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@example.com",
@@ -114,7 +114,7 @@ curl -X POST http://localhost:8080/api/v1/users \
   }' > /dev/null 2>&1
 
 # Create the frontend client
-curl -X POST http://localhost:8080/api/v1/clients \
+curl -X POST https://oauth2.imsc.eu/api/v1/clients \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Frontend Management UI",
@@ -152,7 +152,7 @@ echo "🚀 Development environment is ready!"
 echo ""
 echo "Services running:"
 echo "MongoDB:       localhost:27017"
-echo "OAuth2 Server: http://localhost:8080"
+echo "OAuth2 Server: https://oauth2.imsc.eu"
 echo "Frontend UI:   http://localhost:5173"
 echo ""
 echo "Test credentials:"

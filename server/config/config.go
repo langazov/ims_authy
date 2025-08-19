@@ -24,7 +24,7 @@ type Config struct {
 	RedirectURL    string
 	AuthServerURL  string
 	TokenServerURL string
-	
+
 	// Social login providers
 	Google   SocialProvider
 	GitHub   SocialProvider
@@ -42,33 +42,33 @@ func Load() (*Config, error) {
 		JWTSecret:      getEnv("JWT_SECRET", "your-secret-key"),
 		ClientID:       getEnv("CLIENT_ID", "oauth2-client"),
 		ClientSecret:   getEnv("CLIENT_SECRET", "oauth2-secret"),
-		RedirectURL:    getEnv("REDIRECT_URL", "http://localhost:8080/callback"),
-		AuthServerURL:  getEnv("AUTH_SERVER_URL", "http://localhost:8080/oauth/authorize"),
-		TokenServerURL: getEnv("TOKEN_SERVER_URL", "http://localhost:8080/oauth/token"),
-		
+		RedirectURL:    getEnv("REDIRECT_URL", "https://oauth2.imsc.eu/callback"),
+		AuthServerURL:  getEnv("AUTH_SERVER_URL", "https://oauth2.imsc.eu/oauth/authorize"),
+		TokenServerURL: getEnv("TOKEN_SERVER_URL", "https://oauth2.imsc.eu/oauth/token"),
+
 		// Social login providers configuration
 		Google: SocialProvider{
 			ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
 			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/auth/google/callback"),
+			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "https://oauth2.imsc.eu/auth/google/callback"),
 			Enabled:      getEnv("GOOGLE_CLIENT_ID", "") != "",
 		},
 		GitHub: SocialProvider{
 			ClientID:     getEnv("GITHUB_CLIENT_ID", ""),
 			ClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
-			RedirectURL:  getEnv("GITHUB_REDIRECT_URL", "http://localhost:8080/auth/github/callback"),
+			RedirectURL:  getEnv("GITHUB_REDIRECT_URL", "https://oauth2.imsc.eu/auth/github/callback"),
 			Enabled:      getEnv("GITHUB_CLIENT_ID", "") != "",
 		},
 		Facebook: SocialProvider{
 			ClientID:     getEnv("FACEBOOK_CLIENT_ID", ""),
 			ClientSecret: getEnv("FACEBOOK_CLIENT_SECRET", ""),
-			RedirectURL:  getEnv("FACEBOOK_REDIRECT_URL", "http://localhost:8080/auth/facebook/callback"),
+			RedirectURL:  getEnv("FACEBOOK_REDIRECT_URL", "https://oauth2.imsc.eu/auth/facebook/callback"),
 			Enabled:      getEnv("FACEBOOK_CLIENT_ID", "") != "",
 		},
 		Apple: SocialProvider{
 			ClientID:     getEnv("APPLE_CLIENT_ID", ""),
 			ClientSecret: getEnv("APPLE_CLIENT_SECRET", ""),
-			RedirectURL:  getEnv("APPLE_REDIRECT_URL", "http://localhost:8080/auth/apple/callback"),
+			RedirectURL:  getEnv("APPLE_REDIRECT_URL", "https://oauth2.imsc.eu/auth/apple/callback"),
 			Enabled:      getEnv("APPLE_CLIENT_ID", "") != "",
 		},
 	}

@@ -66,7 +66,7 @@ export class IMSAuthService {
   public config$ = this.configSubject.asObservable();
 
   private config: AuthConfig = {
-    serverUrl: 'http://localhost:8080',
+    serverUrl: 'https://oauth2.imsc.eu',
     tenantId: 'default'
   };
 

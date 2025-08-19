@@ -35,7 +35,7 @@ A demonstration application showing the authentication library in action:
 
 ### Prerequisites
 
-1. **OAuth2 Server Running**: Your server should be running on `http://localhost:8080`
+1. **OAuth2 Server Running**: Your server should be running on `https://oauth2.imsc.eu`
 2. **Demo User**: Create a user with these credentials in your database:
    - Email: `demo@example.com`
    - Password: `password123`
@@ -101,7 +101,7 @@ import { IMSAuthService } from 'ims-auth';
 constructor(private authService: IMSAuthService) {
   // Configure the service
   this.authService.configure({
-    serverUrl: 'http://localhost:8080',
+    serverUrl: 'https://oauth2.imsc.eu',
     tenantId: 'your-tenant-id'
   });
 }

@@ -111,7 +111,7 @@ export class LoginComponent implements OnInit {
   ngOnInit(): void {
     // Configure the auth service with your server URL
     this.authService.configure({
-      serverUrl: 'http://localhost:8080',
+      serverUrl: 'https://oauth2.imsc.eu',
       tenantId: 'default'
     });
 

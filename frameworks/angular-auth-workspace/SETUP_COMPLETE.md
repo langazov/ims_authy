@@ -42,7 +42,7 @@ Use these credentials to test (create a user in your database with these values)
 
 ## 🔗 Server Integration
 
-The library integrates with your existing OAuth2 server at `http://localhost:8080`:
+The library integrates with your existing OAuth2 server at `https://oauth2.imsc.eu`:
 
 ### ✅ Used Endpoints
 - `POST /tenant/{tenantId}/login` - User authentication
@@ -108,7 +108,7 @@ export class AppModule { }
 ```typescript
 constructor(private authService: IMSAuthService) {
   this.authService.configure({
-    serverUrl: 'http://localhost:8080',
+    serverUrl: 'https://oauth2.imsc.eu',
     tenantId: 'your-tenant-id'
   });
 }
