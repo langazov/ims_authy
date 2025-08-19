@@ -126,7 +126,7 @@ func (s *SetupService) GenerateSetupToken() (string, error) {
 	log.Printf("%s", token)
 	log.Printf(strings.Repeat("=", 80))
 	log.Printf("Please navigate to the setup wizard and enter this token.")
-	log.Printf("Setup URL: http://localhost:3000/setup")
+	log.Printf("Setup URL: https://authy.imsc.eu/setup")
 	log.Printf(strings.Repeat("=", 80) + "\n")
 
 	return token, nil

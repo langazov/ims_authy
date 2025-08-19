@@ -225,7 +225,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 	}
 
 	// Redirect to frontend with the authorization code
-	redirectURL := fmt.Sprintf("http://localhost:3000/login?code=%s&provider=%s&tenant_id=%s",
+	redirectURL := fmt.Sprintf("https://authy.imsc.eu/login?code=%s&provider=%s&tenant_id=%s",
 		authCode, provider, tenantID)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)

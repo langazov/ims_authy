@@ -87,8 +87,8 @@ db.refresh_tokens.createIndex({ "revoked": 1 });
 //     name: "Test OAuth2 Client",
 //     description: "Default test client for development",
 //     redirect_uris: [
-//         "http://localhost:3000/callback",
-//         "http://localhost:3000/auth/callback",
+//         "https://authy.imsc.eu/callback",
+//         "https://authy.imsc.eu/auth/callback",
 //         "https://oauth.pstmn.io/v1/callback"
 //     ],
 //     scopes: ["read", "write", "openid", "profile", "email"],

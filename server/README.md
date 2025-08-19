@@ -140,7 +140,7 @@ curl -X POST https://oauth2.imsc.eu/api/v1/users \
 
 1. Direct user to authorization URL:
 ```
-https://oauth2.imsc.eu/oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=http://localhost:3000/callback&scope=read&state=xyz
+https://oauth2.imsc.eu/oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=https://authy.imsc.eu/callback&scope=read&state=xyz
 ```
 
 2. User logs in and authorizes, gets redirected with code
@@ -149,7 +149,7 @@ https://oauth2.imsc.eu/oauth/authorize?response_type=code&client_id=oauth2-clien
 ```bash
 curl -X POST https://oauth2.imsc.eu/oauth/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=authorization_code&code=AUTHORIZATION_CODE&client_id=oauth2-client&client_secret=oauth2-secret&redirect_uri=http://localhost:3000/callback"
+  -d "grant_type=authorization_code&code=AUTHORIZATION_CODE&client_id=oauth2-client&client_secret=oauth2-secret&redirect_uri=https://authy.imsc.eu/callback"
 ```
 
 ## Integration with Frontend
