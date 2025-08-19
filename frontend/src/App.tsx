@@ -16,7 +16,8 @@ function AppContent() {
 
   const checkSetupStatus = async () => {
     try {
-      const response = await fetch('/api/setup/status')
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'
+      const response = await fetch(`${API_BASE}/api/setup/status`)
       const status = await response.json()
       setSetupRequired(status.setup_required)
     } catch (error) {
