@@ -22,14 +22,18 @@ export default function CallbackPage() {
         return
       }
 
-      if (!code || !state) {
+      if (!code) {
         setStatus('error')
-        setError('Missing authorization code or state parameter')
+        setError('Missing authorization code')
         return
       }
 
+      // State parameter is optional for direct social login
+      // If no state, generate a temporary one for the callback handler
+      const finalState = state || 'direct-social-login'
+
       try {
-        await handleCallback(code, state)
+        await handleCallback(code, finalState)
         setStatus('success')
         setTimeout(() => {
           window.location.href = '/'

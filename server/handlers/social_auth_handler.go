@@ -228,7 +228,7 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 	}
 
 	// Redirect to frontend with the authorization code
-	redirectURL := fmt.Sprintf("%s/callback?code=%s&provider=%s&tenant_id=%s",
+	redirectURL := fmt.Sprintf("%s/callback?code=%s&state=direct-social-login&provider=%s&tenant_id=%s",
 		h.config.WebBaseURL, authCode, provider, tenantID)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
