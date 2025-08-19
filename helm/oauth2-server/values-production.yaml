@@ -214,11 +214,7 @@ mongodb:
   #     memory: 512Mi
   
   # Service account configuration for MongoDB
-  serviceAccount:
-    create: false
-    name: "ims-authy-mongodb"
-    annotations: {}
-  
+
   # Network configuration
   service:
     type: ClusterIP
