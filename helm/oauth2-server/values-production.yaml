@@ -191,7 +191,7 @@ mongodb:
   
   auth:
     enabled: true
-    rootUsername: admin
+    rootUsername: root
     rootPassword: "xMyEfnN4TJvHDU3p"
     usernames:
       - oauth2user
