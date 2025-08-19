@@ -262,6 +262,69 @@ func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, r
 	}, nil
 }
 
+// ExchangeCodeForTokensDirectSocialLogin exchanges authorization code from direct social login
+func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI string) (*TokenResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Find the authorization code directly (skip client validation for direct social login)
+	var authCode models.AuthorizationCode
+	err := s.codeCollection.FindOne(ctx, bson.M{
+		"code":      code,
+		"client_id": clientID,
+		"used":      false,
+	}).Decode(&authCode)
+	if err != nil {
+		return nil, errors.New("invalid authorization code")
+	}
+
+	if time.Now().After(authCode.ExpiresAt) {
+		return nil, errors.New("authorization code expired")
+	}
+
+	if authCode.RedirectURI != redirectURI {
+		return nil, errors.New("redirect URI mismatch")
+	}
+
+	// Mark code as used
+	_, err = s.codeCollection.UpdateOne(ctx, bson.M{"_id": authCode.ID}, bson.M{
+		"$set": bson.M{"used": true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate tokens
+	scopes := authCode.Scopes
+	userID := authCode.UserID
+	tenantID := authCode.TenantID
+
+	accessToken, err := s.generateAccessToken(clientID, userID, tenantID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshToken, err := s.generateRefreshToken(accessToken, clientID, userID, tenantID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate ID token for OpenID Connect
+	idToken, err := s.generateIDToken(userID, tenantID, clientID, scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenResponse{
+		AccessToken:  accessToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int(s.accessTokenExpiry.Seconds()),
+		RefreshToken: refreshToken,
+		IDToken:      idToken,
+		Scope:        s.joinScopes(authCode.Scopes),
+	}, nil
+}
+
 // verifyPKCE verifies the code_verifier against the stored code_challenge
 func (s *OAuthService) verifyPKCE(codeVerifier, codeChallenge, method string) bool {
 	if method == "" || method == "plain" {

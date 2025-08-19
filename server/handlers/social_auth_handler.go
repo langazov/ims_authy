@@ -221,7 +221,8 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 
 	// Direct social login without OAuth flow - create temporary auth code for frontend
 	// Generate a temporary authorization code that the frontend can exchange for tokens
-	tempClientID := "direct-social-login"
+	// Use the default frontend client ID so the token exchange will work
+	tempClientID := "frontend-client"
 	tempRedirectURI := h.config.WebBaseURL + "/callback" // Frontend callback page
 	tempScopes := []string{"read", "openid", "profile", "email"}
 

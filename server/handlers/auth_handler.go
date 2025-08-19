@@ -393,8 +393,12 @@ func (h *AuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 	// Support both PKCE (code_verifier) and traditional (client_secret) flows
 	if codeVerifier != "" {
 		tokenResponse, err = h.oauthService.ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI)
-	} else {
+	} else if clientSecret != "" {
 		tokenResponse, err = h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI)
+	} else {
+		// Handle direct social login without client_secret or code_verifier
+		// This is for authorization codes created by the social auth handler
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
