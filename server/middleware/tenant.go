@@ -32,7 +32,7 @@ func TenantMiddleware(tenantService *services.TenantService) func(http.Handler) 
 					tenant, err := tenantService.GetTenantByID(urlTenantID)
 					if err == nil && tenant != nil {
 						tenantID = tenant.ID.Hex()
-						println("Tenant resolved from URL path:", tenant.Name, "ID:", tenantID)
+						log.Printf("Tenant resolved from URL path: %s ID: %s", tenant.Name, tenantID)
 					}
 				}
 			}
