@@ -307,7 +307,8 @@ func (s *TenantService) ResolveTenantFromHost(host string) (*models.Tenant, erro
 	if len(host) > 0 {
 		// Check if it contains a subdomain pattern
 		parts := []string{host}
-		if len(parts) > 0 {
+		parts := strings.Split(host, ".")
+		if len(parts) >= 3 {
 			subdomain := parts[0]
 			tenant, err := s.GetTenantBySubdomain(subdomain)
 			if err == nil {
