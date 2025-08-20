@@ -100,7 +100,6 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
       return out
     }
   }
-
   const copyPassword = async () => {
     try {
       if (!formData.password) {
