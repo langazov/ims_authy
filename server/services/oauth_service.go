@@ -299,7 +299,7 @@ func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, re
 	userID := authCode.UserID
 	tenantID := authCode.TenantID
 
-	accessToken, err := s.generateAccessToken(clientID, userID, tenantID, scopes)
+	accessToken, err := s.generateAccessToken(userID, tenantID, clientID, scopes)
 	if err != nil {
 		return nil, err
 	}
