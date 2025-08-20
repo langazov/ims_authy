@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"oauth2-openid-server/database"
@@ -306,7 +307,6 @@ func (s *TenantService) ResolveTenantFromHost(host string) (*models.Tenant, erro
 	// This would need to be more sophisticated for production
 	if len(host) > 0 {
 		// Check if it contains a subdomain pattern
-		parts := []string{host}
 		parts := strings.Split(host, ".")
 		if len(parts) >= 3 {
 			subdomain := parts[0]
