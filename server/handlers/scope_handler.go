@@ -44,9 +44,7 @@ func (h *ScopeHandler) GetAllScopes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// CORS headers are handled by the global CORS middleware
 
 	json.NewEncoder(w).Encode(scopes)
 }
@@ -75,9 +73,7 @@ func (h *ScopeHandler) CreateScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// CORS headers are handled by the global CORS middleware
 	w.WriteHeader(http.StatusCreated)
 
 	json.NewEncoder(w).Encode(scope)
@@ -112,9 +108,7 @@ func (h *ScopeHandler) UpdateScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// CORS headers are handled by the global CORS middleware
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Scope updated successfully"})
 }
@@ -135,16 +129,12 @@ func (h *ScopeHandler) DeleteScope(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// CORS headers are handled by the global CORS middleware
 
 	json.NewEncoder(w).Encode(map[string]string{"message": "Scope deleted successfully"})
 }
 
 func (h *ScopeHandler) HandleOptions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	// CORS headers are handled by the global CORS middleware
 	w.WriteHeader(http.StatusOK)
 }

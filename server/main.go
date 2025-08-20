@@ -47,18 +47,22 @@ func corsMiddleware(next http.Handler) http.Handler {
 			
 			if originAllowed {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
+				println("CORS: Setting allowed origin:", origin)
 			} else {
 				// For development, allow any localhost origin
 				if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
+					println("CORS: Setting localhost origin:", origin)
 				} else {
 					// Default to the main frontend URL for unknown origins
 					w.Header().Set("Access-Control-Allow-Origin", "https://authy.imsc.eu")
+					println("CORS: Setting default origin for unrecognized origin:", origin)
 				}
 			}
 		} else {
 			// No origin header - default to main frontend URL (never use wildcard with credentials)
 			w.Header().Set("Access-Control-Allow-Origin", "https://authy.imsc.eu")
+			println("CORS: No origin header, setting default:", "https://authy.imsc.eu")
 		}
 		
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
