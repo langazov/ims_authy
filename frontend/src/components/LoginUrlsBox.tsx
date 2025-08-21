@@ -330,6 +330,12 @@ export function LoginUrlsBox() {
               These buttons use the correct auth service methods with fresh PKCE parameters and tenant context.
             </p>
           </div>
+          <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+            <p className="text-xs text-orange-800">
+              <strong>🚧 Backend Status:</strong> Currently using legacy endpoints with tenant context in headers/body. 
+              Tenant-specific URLs (like <code>/tenant/{'{tenantId}'}/login</code>) return 404 - backend implementation needed.
+            </p>
+          </div>
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-xs text-yellow-800">
               <strong>⚠️ URL Reference:</strong> The displayed URLs contain pre-generated PKCE parameters and are for 
