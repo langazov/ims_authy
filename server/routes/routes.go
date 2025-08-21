@@ -43,8 +43,14 @@ type Dependencies struct {
 func SetupRoutes(deps *Dependencies) *mux.Router {
 	router := mux.NewRouter()
 
+	// Well-known endpoints FIRST (no middleware, public access)
+	setupWellKnownRoutes(router, deps)
+
 	// Setup endpoints (no middleware, available during initial setup)
 	setupSetupRoutes(router, deps)
+
+	// Health endpoint (no middleware)
+	setupHealthRoute(router)
 
 	// API routes with tenant middleware
 	setupAPIRoutes(router, deps)
@@ -55,10 +61,29 @@ func SetupRoutes(deps *Dependencies) *mux.Router {
 	// Legacy routes (backwards compatibility)
 	setupLegacyRoutes(router, deps)
 
-	// Health endpoint
-	setupHealthRoute(router)
-
 	return router
+}
+
+// setupWellKnownRoutes configures well-known endpoints (no middleware, public access)
+func setupWellKnownRoutes(router *mux.Router, deps *Dependencies) {
+	// OpenID Connect Discovery endpoints - must be accessible without authentication
+	router.HandleFunc("/.well-known/openid_configuration", deps.AutodiscoveryHandler.LegacyDiscoveryHandler).Methods("GET")
+	
+	// Tenant-specific autodiscovery endpoints - extract tenant ID from URL path
+	router.HandleFunc("/tenant/{tenantId}/.well-known/openid_configuration", func(w http.ResponseWriter, r *http.Request) {
+		// Extract tenant ID from URL path directly (no middleware needed)
+		vars := mux.Vars(r)
+		tenantID := vars["tenantId"]
+		
+		// Create a simple tenant ID getter
+		getTenantID := func(*http.Request) string {
+			return tenantID
+		}
+		
+		// Call the handler
+		handler := deps.AutodiscoveryHandler.TenantDiscoveryHandler(getTenantID)
+		handler(w, r)
+	}).Methods("GET")
 }
 
 // setupSetupRoutes configures initial setup endpoints
@@ -186,10 +211,6 @@ func setupTenantRoutes(router *mux.Router, deps *Dependencies) {
 
 	// Registration route for specific tenant
 	tenantRouter.HandleFunc("/register", deps.UserHandler.RegisterUser).Methods("POST")
-
-	// OpenID Connect autodiscovery endpoint for specific tenant
-	tenantRouter.HandleFunc("/.well-known/openid_configuration", 
-		deps.AutodiscoveryHandler.TenantDiscoveryHandler(middleware.GetTenantIDFromRequest)).Methods("GET")
 }
 
 // setupTenantOAuthRoutes configures tenant-specific OAuth routes
@@ -248,9 +269,6 @@ func setupLegacyRoutes(router *mux.Router, deps *Dependencies) {
 
 	// Direct login route with tenant middleware
 	setupLegacyLoginRoutes(router, deps)
-
-	// Legacy OpenID Connect autodiscovery endpoint
-	router.HandleFunc("/.well-known/openid_configuration", deps.AutodiscoveryHandler.LegacyDiscoveryHandler).Methods("GET")
 }
 
 // setupLegacyOAuthRoutes configures legacy OAuth routes
