@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, Copy, Check, Play } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ExternalLink, Copy, Check, Play, Settings } from 'lucide-react'
 import { useTenant } from '@/contexts/TenantContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { config } from '@/lib/config'
 import { TenantUrlBuilder } from '@/lib/tenantUrls'
+import { apiClient } from '@/lib/api'
 
 interface LoginUrl {
   name: string
@@ -16,12 +18,25 @@ interface LoginUrl {
   provider?: string
 }
 
+interface OAuthClient {
+  id: string
+  client_id: string
+  name: string
+  description: string
+  redirect_uris: string[]
+  scopes: string[]
+  active: boolean
+}
+
 export function LoginUrlsBox() {
   const { activeTenant } = useTenant()
   const { login, loginWithSocial } = useAuth()
   const [copiedUrl, setCopiedUrl] = useState<string>('')
   const [loginUrls, setLoginUrls] = useState<LoginUrl[]>([])
   const [loading, setLoading] = useState(true)
+  const [availableClients, setAvailableClients] = useState<OAuthClient[]>([])
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [clientsLoading, setClientsLoading] = useState(false)
 
   const copyToClipboard = async (url: string) => {
     try {
@@ -66,9 +81,45 @@ export function LoginUrlsBox() {
       .replace(/\//g, '_')
   }
 
+  // Fetch available OAuth clients for the active tenant
+  const fetchClients = async () => {
+    if (!activeTenant?.id) {
+      setAvailableClients([])
+      return
+    }
+
+    try {
+      setClientsLoading(true)
+      const clients = await apiClient.clients.getAll()
+      const activeClients = clients.filter((client: OAuthClient) => client.active)
+      setAvailableClients(activeClients)
+      
+      // Auto-select the first client if none selected
+      if (activeClients.length > 0 && !selectedClientId) {
+        setSelectedClientId(activeClients[0].client_id)
+      }
+    } catch (error) {
+      console.error('Failed to fetch OAuth clients:', error)
+      setAvailableClients([])
+    } finally {
+      setClientsLoading(false)
+    }
+  }
+
+  const getSelectedClient = (): OAuthClient | null => {
+    return availableClients.find(client => client.client_id === selectedClientId) || null
+  }
+
   const generateLoginUrls = async (): Promise<LoginUrl[]> => {
     const urls: LoginUrl[] = []
     const tenantId = activeTenant?.id
+    const selectedClient = getSelectedClient()
+
+    // Use selected client or fallback to config
+    const clientId = selectedClient?.client_id || config.oauth.clientId
+    const clientName = selectedClient?.name || 'Default Client'
+    const clientScopes = selectedClient?.scopes?.join(' ') || config.oauth.scope
+    const redirectUri = selectedClient?.redirect_uris?.[0] || config.oauth.redirectUri
 
     // Generate PKCE parameters for OAuth URLs
     const codeVerifier = generateCodeVerifier()
@@ -78,9 +129,9 @@ export function LoginUrlsBox() {
     // OAuth2 Authorization URL with PKCE
     const oauthParams = new URLSearchParams({
       response_type: 'code',
-      client_id: config.oauth.clientId,
-      redirect_uri: config.oauth.redirectUri,
-      scope: config.oauth.scope,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: clientScopes,
       state: state,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256'
@@ -93,9 +144,9 @@ export function LoginUrlsBox() {
 
     if (tenantId) {
       urls.push({
-        name: 'OAuth2 Login',
+        name: `OAuth2 Login (${clientName})`,
         url: TenantUrlBuilder.buildOAuthAuthorizeUrl(tenantId, oauthParams),
-        description: 'Standard OAuth2 authorization flow for this tenant',
+        description: `OAuth2 authorization flow for client "${clientName}" in this tenant`,
         type: 'oauth'
       })
 
@@ -112,8 +163,8 @@ export function LoginUrlsBox() {
 
       enabledProviders.forEach(([provider, providerConfig]) => {
         const socialParams = new URLSearchParams({
-          client_id: config.oauth.clientId,
-          redirect_uri: config.oauth.redirectUri,
+          client_id: clientId,
+          redirect_uri: redirectUri,
           state: state,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
@@ -125,9 +176,9 @@ export function LoginUrlsBox() {
         }
 
         urls.push({
-          name: `${providerConfig.name} Login`,
+          name: `${providerConfig.name} Login (${clientName})`,
           url: TenantUrlBuilder.buildSocialLoginUrl(tenantId, provider, socialParams),
-          description: `Login with ${providerConfig.name} for this tenant`,
+          description: `Login with ${providerConfig.name} for client "${clientName}" in this tenant`,
           type: 'social',
           provider
         })
@@ -154,8 +205,8 @@ export function LoginUrlsBox() {
 
       enabledProviders.forEach(([provider, providerConfig]) => {
         const socialParams = new URLSearchParams({
-          client_id: config.oauth.clientId,
-          redirect_uri: config.oauth.redirectUri,
+          client_id: clientId,
+          redirect_uri: redirectUri,
           state: state,
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
@@ -164,9 +215,9 @@ export function LoginUrlsBox() {
         // Legacy mode - no tenant ID added
 
         urls.push({
-          name: `${providerConfig.name} Login (Legacy)`,
+          name: `${providerConfig.name} Login (${clientName})`,
           url: TenantUrlBuilder.buildLegacySocialLoginUrl(provider, socialParams),
-          description: `Login with ${providerConfig.name} (legacy)`,
+          description: `Login with ${providerConfig.name} for client "${clientName}" (legacy)`,
           type: 'social',
           provider
         })
@@ -176,7 +227,12 @@ export function LoginUrlsBox() {
     return urls
   }
 
-  // Generate URLs when component mounts or tenant changes
+  // Fetch clients when tenant changes
+  useEffect(() => {
+    fetchClients()
+  }, [activeTenant?.id])
+
+  // Generate URLs when tenant or selected client changes
   useEffect(() => {
     const loadUrls = async () => {
       setLoading(true)
@@ -191,8 +247,11 @@ export function LoginUrlsBox() {
       }
     }
 
-    loadUrls()
-  }, [activeTenant?.id])
+    // Only generate URLs if we have clients loaded or no tenant selected
+    if (!activeTenant?.id || availableClients.length > 0 || !clientsLoading) {
+      loadUrls()
+    }
+  }, [activeTenant?.id, selectedClientId, availableClients])
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -222,7 +281,7 @@ export function LoginUrlsBox() {
     }
   }
 
-  if (loading) {
+  if (loading || (activeTenant?.id && clientsLoading)) {
     return (
       <Card>
         <CardHeader>
@@ -234,6 +293,9 @@ export function LoginUrlsBox() {
         <CardContent>
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="ml-4 text-sm text-muted-foreground">
+              {clientsLoading ? 'Loading OAuth2 clients...' : 'Generating login URLs...'}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -259,17 +321,43 @@ export function LoginUrlsBox() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <ExternalLink className="mr-2 h-5 w-5" />
-          Login URLs
-          {activeTenant && (
-            <Badge variant="outline" className="ml-2">
-              {activeTenant.name}
-            </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <CardTitle className="flex items-center">
+              <ExternalLink className="mr-2 h-5 w-5" />
+              Login URLs
+              {activeTenant && (
+                <Badge variant="outline" className="ml-2">
+                  {activeTenant.name}
+                </Badge>
+              )}
+            </CardTitle>
+          </div>
+          {activeTenant && availableClients.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <Settings className="h-4 w-4 text-muted-foreground" />
+              <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select OAuth2 Client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableClients.map((client) => (
+                    <SelectItem key={client.client_id} value={client.client_id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
-        </CardTitle>
+        </div>
         <p className="text-sm text-muted-foreground">
           Available authentication endpoints for {activeTenant ? 'this tenant' : 'the system'}
+          {selectedClientId && availableClients.length > 0 && (
+            <span className="ml-1">
+              using client "{availableClients.find(c => c.client_id === selectedClientId)?.name}"
+            </span>
+          )}
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -336,6 +424,22 @@ export function LoginUrlsBox() {
               <code>/tenant/{'{tenantId}'}/login</code>. URLs automatically switch based on selected tenant.
             </p>
           </div>
+          {activeTenant && availableClients.length > 0 && (
+            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-xs text-purple-800">
+                <strong>⚙️ OAuth2 Client Configuration:</strong> URLs are generated using the selected OAuth2 client's 
+                configuration including client ID, redirect URIs, and scopes. Switch clients to generate different URLs.
+              </p>
+            </div>
+          )}
+          {activeTenant && availableClients.length === 0 && !clientsLoading && (
+            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs text-orange-800">
+                <strong>⚠️ No OAuth2 Clients:</strong> No active OAuth2 clients found for this tenant. 
+                URLs are generated using default configuration. Create clients in the Client Management section.
+              </p>
+            </div>
+          )}
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-xs text-yellow-800">
               <strong>⚠️ URL Reference:</strong> The displayed URLs contain pre-generated PKCE parameters and are for 
