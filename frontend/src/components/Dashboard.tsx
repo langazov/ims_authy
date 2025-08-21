@@ -4,6 +4,7 @@ import { Group, ShieldClose, Cog, Activity } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api'
 import { useTenant } from '@/contexts/TenantContext'
+import { LoginUrlsBox } from '@/components/LoginUrlsBox'
 
 interface ActivityItem {
   id: string
@@ -230,6 +231,11 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Login URLs Box */}
+      <div className="grid gap-6">
+        <LoginUrlsBox />
       </div>
     </div>
   )
