@@ -148,7 +148,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fallback: Generate OAuth tokens for backward compatibility
-	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), tenantID, user.Scopes)
+	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), tenantID, user.Scopes, r)
 	if err != nil {
 		http.Error(w, "Failed to generate authentication tokens", http.StatusInternalServerError)
 		return
@@ -435,13 +435,13 @@ func (h *AuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 
 	// Support both PKCE (code_verifier) and traditional (client_secret) flows
 	if codeVerifier != "" {
-		tokenResponse, err = h.oauthService.ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI)
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI, r)
 	} else if clientSecret != "" {
-		tokenResponse, err = h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI)
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI, r)
 	} else {
 		// Handle direct social login without client_secret or code_verifier
 		// This is for authorization codes created by the social auth handler
-		tokenResponse, err = h.oauthService.ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI)
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI, r)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

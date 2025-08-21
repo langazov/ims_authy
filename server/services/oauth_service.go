@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"net/http"
 	"time"
 
 	"oauth2-openid-server/database"
@@ -71,6 +72,26 @@ func NewOAuthService(db *database.MongoDB, jwtSecret string) *OAuthService {
 	}
 }
 
+// getBaseURL extracts the base URL from the HTTP request (same as autodiscovery)
+func (s *OAuthService) getBaseURL(r *http.Request) string {
+	scheme := "https"
+	if r.Header.Get("X-Forwarded-Proto") != "" {
+		scheme = r.Header.Get("X-Forwarded-Proto")
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	
+	return scheme + "://" + r.Host
+}
+
+// generateIssuer creates the appropriate issuer URL based on tenant context
+func (s *OAuthService) generateIssuer(baseURL, tenantID string) string {
+	if tenantID != "" {
+		return baseURL + "/tenant/" + tenantID
+	}
+	return baseURL
+}
+
 func (s *OAuthService) ValidateClient(clientID, clientSecret string) (*models.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -120,7 +141,7 @@ func (s *OAuthService) CreateAuthorizationCode(clientID, userID, tenantID, redir
 	return code, nil
 }
 
-func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI string) (*TokenResponse, error) {
+func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI string, r *http.Request) (*TokenResponse, error) {
 	_, err := s.ValidateClient(clientID, clientSecret)
 	if err != nil {
 		return nil, err
@@ -155,7 +176,8 @@ func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redir
 		return nil, err
 	}
 
-	accessToken, err := s.generateAccessToken(authCode.UserID, authCode.TenantID, clientID, authCode.Scopes)
+	baseURL := s.getBaseURL(r)
+	accessToken, err := s.generateAccessToken(authCode.UserID, authCode.TenantID, clientID, baseURL, authCode.Scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +188,7 @@ func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redir
 	}
 
 	// Generate ID token for OpenID Connect
-	idToken, err := s.generateIDToken(authCode.UserID, authCode.TenantID, clientID, authCode.Scopes)
+	idToken, err := s.generateIDToken(authCode.UserID, authCode.TenantID, clientID, baseURL, authCode.Scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +204,7 @@ func (s *OAuthService) ExchangeCodeForTokens(code, clientID, clientSecret, redir
 }
 
 // ExchangeCodeForTokensPKCE exchanges an authorization code for tokens using PKCE
-func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI string) (*TokenResponse, error) {
+func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI string, r *http.Request) (*TokenResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -236,7 +258,8 @@ func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, r
 	}
 
 	// Generate tokens
-	accessToken, err := s.generateAccessToken(authCode.UserID, authCode.TenantID, clientID, authCode.Scopes)
+	baseURL := s.getBaseURL(r)
+	accessToken, err := s.generateAccessToken(authCode.UserID, authCode.TenantID, clientID, baseURL, authCode.Scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +270,7 @@ func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, r
 	}
 
 	// Generate ID token for OpenID Connect
-	idToken, err := s.generateIDToken(authCode.UserID, authCode.TenantID, clientID, authCode.Scopes)
+	idToken, err := s.generateIDToken(authCode.UserID, authCode.TenantID, clientID, baseURL, authCode.Scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +286,7 @@ func (s *OAuthService) ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, r
 }
 
 // ExchangeCodeForTokensDirectSocialLogin exchanges authorization code from direct social login
-func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI string) (*TokenResponse, error) {
+func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI string, r *http.Request) (*TokenResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -298,8 +321,9 @@ func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, re
 	scopes := authCode.Scopes
 	userID := authCode.UserID
 	tenantID := authCode.TenantID
+	baseURL := s.getBaseURL(r)
 
-	accessToken, err := s.generateAccessToken(userID, tenantID, clientID, scopes)
+	accessToken, err := s.generateAccessToken(userID, tenantID, clientID, baseURL, scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +334,7 @@ func (s *OAuthService) ExchangeCodeForTokensDirectSocialLogin(code, clientID, re
 	}
 
 	// Generate ID token for OpenID Connect
-	idToken, err := s.generateIDToken(userID, tenantID, clientID, scopes)
+	idToken, err := s.generateIDToken(userID, tenantID, clientID, baseURL, scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +364,7 @@ func (s *OAuthService) verifyPKCE(codeVerifier, codeChallenge, method string) bo
 	return false
 }
 
-func (s *OAuthService) generateAccessToken(userID, tenantID, clientID string, scopes []string) (string, error) {
+func (s *OAuthService) generateAccessToken(userID, tenantID, clientID, baseURL string, scopes []string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -354,6 +378,7 @@ func (s *OAuthService) generateAccessToken(userID, tenantID, clientID string, sc
 		Scopes:   scopes,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
+			Issuer:    s.generateIssuer(baseURL, tenantID),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -387,7 +412,7 @@ func (s *OAuthService) generateAccessToken(userID, tenantID, clientID string, sc
 }
 
 // generateIDToken creates an OpenID Connect ID token with user information
-func (s *OAuthService) generateIDToken(userID, tenantID, clientID string, scopes []string) (string, error) {
+func (s *OAuthService) generateIDToken(userID, tenantID, clientID, baseURL string, scopes []string) (string, error) {
 	// Get user information for the ID token
 	userService := NewUserService(s.db)
 	user, err := userService.GetUserByID(userID)
@@ -406,6 +431,7 @@ func (s *OAuthService) generateIDToken(userID, tenantID, clientID string, scopes
 		Scopes:   user.Scopes, // Use user's actual database scopes instead of OAuth request scopes
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
+			Issuer:    s.generateIssuer(baseURL, tenantID),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -506,10 +532,11 @@ func (s *OAuthService) generateRandomString(length int) string {
 }
 
 // GenerateDirectLoginTokens creates OAuth tokens for direct login (bypassing authorization code flow)
-func (s *OAuthService) GenerateDirectLoginTokens(userID, tenantID string, scopes []string) (*TokenResponse, error) {
+func (s *OAuthService) GenerateDirectLoginTokens(userID, tenantID string, scopes []string, r *http.Request) (*TokenResponse, error) {
 	clientID := "direct-login-client" // Special client ID for direct login
+	baseURL := s.getBaseURL(r)
 	
-	accessToken, err := s.generateAccessToken(userID, tenantID, clientID, scopes)
+	accessToken, err := s.generateAccessToken(userID, tenantID, clientID, baseURL, scopes)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +547,7 @@ func (s *OAuthService) GenerateDirectLoginTokens(userID, tenantID string, scopes
 	}
 
 	// Generate ID token for OpenID Connect
-	idToken, err := s.generateIDToken(userID, tenantID, clientID, scopes)
+	idToken, err := s.generateIDToken(userID, tenantID, clientID, baseURL, scopes)
 	if err != nil {
 		return nil, err
 	}

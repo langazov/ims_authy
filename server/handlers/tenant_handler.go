@@ -11,6 +11,45 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// TenantResponse represents a tenant with additional metadata
+type TenantResponse struct {
+	*models.Tenant
+	WellKnownURLs WellKnownURLs `json:"well_known_urls"`
+}
+
+// WellKnownURLs contains OpenID Connect discovery URLs for the tenant
+type WellKnownURLs struct {
+	OpenIDConfiguration string `json:"openid_configuration"`
+}
+
+// buildTenantResponse creates a tenant response with well-known URLs
+func (h *TenantHandler) buildTenantResponse(tenant *models.Tenant, r *http.Request) *TenantResponse {
+	scheme := "https"
+	if r.Header.Get("X-Forwarded-Proto") != "" {
+		scheme = r.Header.Get("X-Forwarded-Proto")
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	
+	baseURL := scheme + "://" + r.Host
+	
+	return &TenantResponse{
+		Tenant: tenant,
+		WellKnownURLs: WellKnownURLs{
+			OpenIDConfiguration: baseURL + "/.well-known/" + tenant.ID.Hex() + "/openid_configuration",
+		},
+	}
+}
+
+// buildTenantsResponse creates tenant responses with well-known URLs for a slice of tenants
+func (h *TenantHandler) buildTenantsResponse(tenants []*models.Tenant, r *http.Request) []*TenantResponse {
+	response := make([]*TenantResponse, len(tenants))
+	for i, tenant := range tenants {
+		response[i] = h.buildTenantResponse(tenant, r)
+	}
+	return response
+}
+
 type TenantHandler struct {
 	tenantService         *services.TenantService
 	socialProviderService *services.SocialProviderService
@@ -105,7 +144,7 @@ func (h *TenantHandler) CreateTenant(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(tenant)
+	json.NewEncoder(w).Encode(h.buildTenantResponse(tenant, r))
 }
 
 func (h *TenantHandler) GetTenants(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +160,7 @@ func (h *TenantHandler) GetTenants(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tenants)
+	json.NewEncoder(w).Encode(h.buildTenantsResponse(tenants, r))
 }
 
 func (h *TenantHandler) GetTenant(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +179,7 @@ func (h *TenantHandler) GetTenant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tenant)
+	json.NewEncoder(w).Encode(h.buildTenantResponse(tenant, r))
 }
 
 func (h *TenantHandler) UpdateTenant(w http.ResponseWriter, r *http.Request) {
@@ -170,8 +209,15 @@ func (h *TenantHandler) UpdateTenant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the updated tenant to include the ID in the response
+	updatedTenant, err := h.tenantService.GetTenantByID(tenantID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve updated tenant", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tenant)
+	json.NewEncoder(w).Encode(h.buildTenantResponse(updatedTenant, r))
 }
 
 func (h *TenantHandler) DeleteTenant(w http.ResponseWriter, r *http.Request) {

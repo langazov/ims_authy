@@ -275,9 +275,9 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return fresh user data
+	// Return fresh user data (using 'sub' for OpenID Connect compliance)
 	response := map[string]interface{}{
-		"id":         user.ID.Hex(),
+		"sub":        user.ID.Hex(),
 		"tenant_id":  user.TenantID,
 		"email":      user.Email,
 		"username":   user.Username,
