@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"oauth2-openid-server/services"
+
 	"github.com/gorilla/mux"
 )
 

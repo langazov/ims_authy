@@ -14,7 +14,7 @@ import { IMSAuthService, LoginRequest, LoginResponse } from './ims-auth.service'
           <h2>{{ title }}</h2>
           <p *ngIf="subtitle" class="subtitle">{{ subtitle }}</p>
         </div>
-        
+
         <div class="form-group" *ngIf="showTenantField">
           <label for="tenant">Tenant</label>
           <input
@@ -237,7 +237,7 @@ import { IMSAuthService, LoginRequest, LoginResponse } from './ims-auth.service'
         align-items: flex-start;
         padding-top: 2rem;
       }
-      
+
       .login-form {
         padding: 1.5rem;
       }
@@ -295,14 +295,15 @@ export class IMSLoginComponent implements OnInit {
     if (this.loginForm.valid) {
       // Ensure tenant is updated before login attempt
       this.updateTenantConfig();
-      
+
       this.isLoading = true;
       this.errorMessage = '';
       this.successMessage = '';
 
       const credentials: LoginRequest = {
         email: this.loginForm.value.email,
-        password: this.loginForm.value.password
+        password: this.loginForm.value.password,
+        tenant_id: this.tenantId,
       };
 
       if (this.require2FA && this.loginForm.value.twoFactorCode) {
@@ -312,7 +313,7 @@ export class IMSLoginComponent implements OnInit {
       this.authService.login(credentials).subscribe({
         next: (response) => {
           this.isLoading = false;
-          
+
           if (response.two_factor_required) {
             this.require2FA = true;
             this.require2FAChange.emit(true);

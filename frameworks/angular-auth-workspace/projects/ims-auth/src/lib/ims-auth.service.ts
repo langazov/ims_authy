@@ -14,6 +14,7 @@ export interface User {
 export interface LoginRequest {
   email: string;
   password: string;
+  tenant_id?: string;
   two_fa_code?: string;
 }
 
@@ -80,7 +81,7 @@ export class IMSAuthService {
   configure(config: Partial<AuthConfig>): void {
     this.config = { ...this.config, ...config };
     this.configSubject.next(this.config);
-    
+
     // Store tenant ID if provided
     if (config.tenantId) {
       localStorage.setItem(this.TENANT_KEY, config.tenantId);
@@ -121,7 +122,7 @@ export class IMSAuthService {
    * Login with email and password
    */
   login(credentials: LoginRequest): Observable<LoginResponse> {
-    const url = this.config.tenantId 
+    const url = this.config.tenantId
       ? `${this.config.serverUrl}/tenant/${this.config.tenantId}/login`
       : `${this.config.serverUrl}/login`;
 
@@ -229,7 +230,7 @@ export class IMSAuthService {
   logout(): Observable<any> {
     // Clear local data immediately
     this.clearAuthData();
-    
+
     // Try to notify server, but don't fail if it's unreachable
     return this.http.post(`${this.config.serverUrl}/logout`, {}, {
       headers: this.getAuthHeaders()
@@ -332,7 +333,7 @@ export class IMSAuthService {
     };
 
     localStorage.setItem(this.USER_KEY, JSON.stringify(user));
-    
+
     this.currentUserSubject.next(user);
     this.isAuthenticatedSubject.next(true);
   }
@@ -345,7 +346,7 @@ export class IMSAuthService {
     localStorage.removeItem(this.REFRESH_TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
     // Keep tenant ID for next login
-    
+
     this.currentUserSubject.next(null);
     this.isAuthenticatedSubject.next(false);
   }

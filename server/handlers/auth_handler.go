@@ -19,15 +19,16 @@ type AuthHandler struct {
 }
 
 type LoginRequest struct {
-	Email                 string `json:"email"`
-	Password              string `json:"password"`
-	TwoFACode             string `json:"two_fa_code,omitempty"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+	TwoFACode string `json:"two_fa_code,omitempty"`
 	// OAuth PKCE parameters for secure authentication
-	ClientID              string `json:"client_id,omitempty"`
-	RedirectURI           string `json:"redirect_uri,omitempty"`
-	CodeChallenge         string `json:"code_challenge,omitempty"`
-	CodeChallengeMethod   string `json:"code_challenge_method,omitempty"`
-	State                 string `json:"state,omitempty"`
+	ClientID            string `json:"client_id,omitempty"`
+	RedirectURI         string `json:"redirect_uri,omitempty"`
+	CodeChallenge       string `json:"code_challenge,omitempty"`
+	CodeChallengeMethod string `json:"code_challenge_method,omitempty"`
+	State               string `json:"state,omitempty"`
+	TenantID            string `json:"tenant_id,omitempty"`
 }
 
 type AuthorizeRequest struct {
@@ -94,8 +95,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 			// First step: credentials verified, but 2FA required
 			response := map[string]interface{}{
 				"two_factor_required": true,
-				"user_id":            user.ID.Hex(),
-				"message":            "Two-factor authentication required",
+				"user_id":             user.ID.Hex(),
+				"message":             "Two-factor authentication required",
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
@@ -133,13 +134,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 
 		response := map[string]interface{}{
-			"user_id": user.ID.Hex(),
-			"email":   user.Email,
-			"scopes":  user.Scopes,
-			"groups":  user.Groups,
+			"user_id":             user.ID.Hex(),
+			"email":               user.Email,
+			"scopes":              user.Scopes,
+			"groups":              user.Groups,
 			"two_factor_verified": twoFactorRequired,
-			"code":    authCode,  // Return authorization code for PKCE flow
-			"state":   loginReq.State,
+			"code":                authCode, // Return authorization code for PKCE flow
+			"state":               loginReq.State,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -155,12 +156,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"user_id": user.ID.Hex(),
-		"email":   user.Email,
-		"scopes":  user.Scopes,
-		"groups":  user.Groups,
+		"user_id":             user.ID.Hex(),
+		"email":               user.Email,
+		"scopes":              user.Scopes,
+		"groups":              user.Groups,
 		"two_factor_verified": twoFactorRequired,
-		"tokens": tokens,
+		"tokens":              tokens,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -258,11 +259,11 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 	tenantID := "" // Default tenant for auth handler
 	enabledProviders := h.socialAuthService.GetEnabledProviders(tenantID)
 	socialButtons := ""
-	
+
 	for _, provider := range enabledProviders {
 		providerURL := fmt.Sprintf("/auth/%s/oauth?client_id=%s&redirect_uri=%s&scope=%s&state=%s&code_challenge=%s&code_challenge_method=%s",
 			provider, clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod)
-		
+
 		var buttonClass, buttonText string
 		switch provider {
 		case "google":
@@ -281,7 +282,7 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 			buttonClass = "social-btn"
 			buttonText = "Continue with " + provider
 		}
-		
+
 		socialButtons += fmt.Sprintf(`
 			<a href="%s" class="social-button %s">%s</a>
 		`, providerURL, buttonClass, buttonText)
@@ -403,10 +404,10 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
     </div>
 </body>
 </html>`,
-        scope,
-        socialSection,
-        clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod,
-        redirectURI, state)
+		scope,
+		socialSection,
+		clientID, redirectURI, scope, state, codeChallenge, codeChallengeMethod,
+		redirectURI, state)
 
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(html))
