@@ -87,6 +87,7 @@ func main() {
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
 	setupHandler := handlers.NewSetupHandler(setupService)
 	autodiscoveryHandler := autodiscovery.NewHandler()
+	jwksHandler := handlers.NewJWKSHandler(cfg.JWTSecret)
 
 	// Setup all dependencies for routes
 	deps := &routes.Dependencies{
@@ -113,6 +114,7 @@ func main() {
 		TwoFactorHandler:     twoFactorHandler,
 		SetupHandler:         setupHandler,
 		AutodiscoveryHandler: autodiscoveryHandler,
+		JWKSHandler:          jwksHandler,
 	}
 
 	router := routes.SetupRoutes(deps)

@@ -37,6 +37,7 @@ type Dependencies struct {
 	TwoFactorHandler    *handlers.TwoFactorHandler
 	SetupHandler        *handlers.SetupHandler
 	AutodiscoveryHandler *autodiscovery.Handler
+	JWKSHandler         *handlers.JWKSHandler
 }
 
 // SetupRoutes configures all the routes for the application
@@ -71,6 +72,9 @@ func setupWellKnownRoutes(router *mux.Router, deps *Dependencies) {
 	// OpenID Connect Discovery endpoints - must be accessible without authentication
 	router.HandleFunc("/.well-known/openid_configuration", deps.AutodiscoveryHandler.LegacyDiscoveryHandler).Methods("GET")
 	
+	// Legacy JWKS endpoint
+	router.HandleFunc("/.well-known/jwks.json", deps.JWKSHandler.GetJWKS).Methods("GET")
+	
 	// Tenant-specific autodiscovery endpoints - New format: /.well-known/{tenant-id}/openid_configuration
 	router.HandleFunc("/.well-known/{tenantId}/openid_configuration", func(w http.ResponseWriter, r *http.Request) {
 		// Extract tenant ID from URL path directly (no middleware needed)
@@ -86,6 +90,9 @@ func setupWellKnownRoutes(router *mux.Router, deps *Dependencies) {
 		handler := deps.AutodiscoveryHandler.TenantDiscoveryHandler(getTenantID)
 		handler(w, r)
 	}).Methods("GET")
+	
+	// Tenant-specific JWKS endpoints
+	router.HandleFunc("/tenant/{tenantId}/.well-known/jwks.json", deps.JWKSHandler.GetJWKS).Methods("GET")
 }
 
 // setupSetupRoutes configures initial setup endpoints
