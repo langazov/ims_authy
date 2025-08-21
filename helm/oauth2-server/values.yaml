@@ -77,7 +77,7 @@ ingress:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/cors-allow-headers: DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Tenant-ID,Accept,Origin
     nginx.ingress.kubernetes.io/cors-allow-methods: POST, GET, OPTIONS, PUT, DELETE, PATCH
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://authy.imsc.eu"
     nginx.ingress.kubernetes.io/cors-expose-headers: Content-Length,Content-Type,Authorization,X-Tenant-ID
     nginx.ingress.kubernetes.io/cors-max-age: "86400"
     nginx.ingress.kubernetes.io/enable-cors: "true"
