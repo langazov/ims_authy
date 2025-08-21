@@ -55,6 +55,12 @@ class AuthService {
     // Use provided tenantId or get from localStorage
     const activeTenantId = tenantId || localStorage.getItem('activeTenantId')
 
+    console.info('[auth] startLogin - tenant resolution priority', {
+      explicitTenantId: tenantId,
+      localStorageTenantId: localStorage.getItem('activeTenantId'),
+      finalTenantId: activeTenantId
+    })
+
     console.info('[auth] startLogin', { 
       clientId: config.oauth.clientId, 
       redirectUri: config.oauth.redirectUri, 
@@ -315,11 +321,31 @@ class AuthService {
       localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
       localStorage.setItem('oauth_state', state)
 
-      // Use provided tenantId or get from localStorage
+      // Use provided tenantId, or get from localStorage, or fallback to active tenant context
+      // Priority: explicit parameter > localStorage > active tenant context
       const activeTenantId = tenantId || localStorage.getItem('activeTenantId')
+      
+      console.info('[auth] directLogin - tenant resolution priority', {
+        explicitTenantId: tenantId,
+        localStorageTenantId: localStorage.getItem('activeTenantId'),
+        finalTenantId: activeTenantId
+      })
+      
+      // Debug tenant ID resolution
+      console.info('[auth] directLogin - tenant ID resolution', {
+        providedTenantId: tenantId,
+        providedTenantIdType: typeof tenantId,
+        providedTenantIdLength: tenantId?.length,
+        localStorageTenantId: localStorage.getItem('activeTenantId'),
+        resolvedTenantId: activeTenantId,
+        resolvedTenantIdType: typeof activeTenantId,
+        resolvedTenantIdLength: activeTenantId?.length,
+        isEmpty: !activeTenantId || activeTenantId.trim() === '',
+        localStorageKeys: Object.keys(localStorage).filter(key => key.includes('tenant'))
+      })
 
       // Step 1: Authenticate with credentials and get authorization code
-      const loginUrl = activeTenantId 
+      const loginUrl = (activeTenantId && activeTenantId.trim())
         ? TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
         : TenantUrlBuilder.buildLegacyDirectLoginUrl()
       
@@ -330,12 +356,15 @@ class AuthService {
         'Content-Type': 'application/json',
       }
       
-      // Add X-Tenant-ID header if tenant is available
-      if (activeTenantId) {
+      // Add X-Tenant-ID header if tenant is available and not empty
+      if (activeTenantId && activeTenantId.trim()) {
         headers['X-Tenant-ID'] = activeTenantId
         console.info('[auth] directLogin - adding X-Tenant-ID header', { tenantId: activeTenantId })
       } else {
-        console.warn('[auth] directLogin - no tenant ID available, using legacy flow')
+        console.warn('[auth] directLogin - no valid tenant ID available, using legacy flow', { 
+          activeTenantId, 
+          isEmpty: !activeTenantId || activeTenantId.trim() === ''
+        })
       }
       
       // Build request body with explicit tenant ID handling
@@ -351,12 +380,15 @@ class AuthService {
         state: state,
       }
 
-      // Always include tenant_id in body when available (even if also in header)
-      if (activeTenantId) {
+      // Always include tenant_id in body when available and not empty (even if also in header)
+      if (activeTenantId && activeTenantId.trim()) {
         requestBody.tenant_id = activeTenantId
         console.info('[auth] directLogin - including tenant_id in request body', { tenant_id: activeTenantId })
       } else {
-        console.warn('[auth] directLogin - no tenant_id in request body (legacy mode)')
+        console.warn('[auth] directLogin - no tenant_id in request body (legacy mode)', {
+          activeTenantId,
+          isEmpty: !activeTenantId || activeTenantId.trim() === ''
+        })
       }
 
       console.info('[auth] directLogin - full request body', {

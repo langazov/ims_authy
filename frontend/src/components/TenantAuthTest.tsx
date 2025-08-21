@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTenant } from '@/contexts/TenantContext'
 
 interface TestResult {
-  tenantId: string
+  tenantId: string | undefined
   tenantName: string
   email: string
   success: boolean
@@ -27,13 +27,18 @@ export function TenantAuthTest() {
   const [testing, setTesting] = useState(false)
   const [results, setResults] = useState<TestResult[]>([])
 
-  const runSingleTenantTest = async (tenantId: string, tenantName: string) => {
+  const runSingleTenantTest = async (tenantId: string | undefined, tenantName: string) => {
     setTesting(true)
     
     try {
       console.log(`[TenantAuthTest] === Testing login for tenant: ${tenantName} ===`)
       console.log(`[TenantAuthTest] Tenant ID: ${tenantId || 'NONE (legacy)'}`)
+      console.log(`[TenantAuthTest] Tenant ID type: ${typeof tenantId}`)
+      console.log(`[TenantAuthTest] Tenant ID length: ${tenantId?.length}`)
+      console.log(`[TenantAuthTest] Tenant ID is empty: ${!tenantId || tenantId.trim() === ''}`)
       console.log(`[TenantAuthTest] Email: ${email}`)
+      console.log(`[TenantAuthTest] Active tenant from context: ${activeTenant?.id}`)
+      console.log(`[TenantAuthTest] LocalStorage activeTenantId: ${localStorage.getItem('activeTenantId')}`)
       console.log(`[TenantAuthTest] Calling directLogin with tenantId parameter...`)
       
       const result = await directLogin(email, password, undefined, tenantId)
@@ -88,15 +93,58 @@ export function TenantAuthTest() {
       await new Promise(resolve => setTimeout(resolve, 500)) // Small delay between tests
       if (tenant.id) {
         await runSingleTenantTest(tenant.id, tenant.name)
+      } else {
+        console.warn('[TenantAuthTest] Skipping tenant with no ID:', tenant.name)
       }
     }
     
     // Test with no tenant (legacy flow)
     await new Promise(resolve => setTimeout(resolve, 500))
-    await runSingleTenantTest('', 'Legacy (No Tenant)')
+    await runSingleTenantTest(undefined, 'Legacy (No Tenant)')
     
     setTesting(false)
     console.log('[TenantAuthTest] Multi-tenant test completed')
+  }
+
+  const testActiveTenantLogin = async () => {
+    if (!activeTenant) return
+    
+    setTesting(true)
+    console.log('[TenantAuthTest] === Testing Active Tenant Login (without explicit tenantId) ===')
+    console.log('[TenantAuthTest] Active tenant:', activeTenant.name, activeTenant.id)
+    console.log('[TenantAuthTest] Calling directLogin WITHOUT tenantId parameter...')
+    
+    try {
+      // Call directLogin WITHOUT tenantId - should auto-detect from context
+      const result = await directLogin(email, password, undefined, undefined)
+      
+      const testResult: TestResult = {
+        tenantId: activeTenant.id,
+        tenantName: `${activeTenant.name} (Auto-detected)`,
+        email,
+        success: result.success,
+        error: result.error,
+        user: result.user,
+        timestamp: new Date().toISOString()
+      }
+      
+      setResults(prev => [testResult, ...prev])
+      console.log('[TenantAuthTest] Active tenant test result:', testResult)
+      
+    } catch (error) {
+      console.error('[TenantAuthTest] Active tenant test error:', error)
+      const testResult: TestResult = {
+        tenantId: activeTenant.id,
+        tenantName: `${activeTenant.name} (Auto-detected)`,
+        email,
+        success: false,
+        error: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        timestamp: new Date().toISOString()
+      }
+      setResults(prev => [testResult, ...prev])
+    } finally {
+      setTesting(false)
+    }
   }
 
   const clearResults = () => {
@@ -170,6 +218,14 @@ export function TenantAuthTest() {
                 disabled={testing || results.length === 0}
               >
                 Clear Results
+              </Button>
+              <Button
+                onClick={() => testActiveTenantLogin()}
+                disabled={testing || !email || !password || !activeTenant}
+                variant="secondary"
+                size="sm"
+              >
+                Test Active Tenant
               </Button>
               <Button
                 onClick={runMultiTenantTest}
@@ -249,14 +305,26 @@ export function TenantAuthTest() {
               ))}
             </div>
 
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">Expected Behavior:</h4>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>• <strong>Proper Isolation:</strong> Same email should only succeed in the tenant where the user exists</li>
-                <li>• <strong>Tenant Context:</strong> Successful logins should return user with correct tenant_id</li>
-                <li>• <strong>Security:</strong> Failed logins should not reveal if user exists in other tenants</li>
-                <li>• <strong>Headers:</strong> Check browser Network tab to verify X-Tenant-ID headers are sent</li>
-              </ul>
+            <div className="mt-4 space-y-3">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">Expected Behavior:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• <strong>Proper Isolation:</strong> Same email should only succeed in the tenant where the user exists</li>
+                  <li>• <strong>Tenant Context:</strong> Successful logins should return user with correct tenant_id</li>
+                  <li>• <strong>Security:</strong> Failed logins should not reveal if user exists in other tenants</li>
+                  <li>• <strong>Headers:</strong> Check browser Network tab to verify X-Tenant-ID headers are sent</li>
+                </ul>
+              </div>
+              
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <h4 className="font-medium text-purple-900 mb-2">Test Active Tenant Button:</h4>
+                <ul className="text-sm text-purple-800 space-y-1">
+                  <li>• <strong>Auto-Detection:</strong> Tests if directLogin automatically uses the active tenant</li>
+                  <li>• <strong>No Explicit ID:</strong> Calls directLogin() without passing tenantId parameter</li>
+                  <li>• <strong>Context Integration:</strong> Should use tenant from TenantContext/localStorage</li>
+                  <li>• <strong>Backward Compatibility:</strong> Ensures existing code still works</li>
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
