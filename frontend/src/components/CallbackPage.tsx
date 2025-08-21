@@ -14,19 +14,30 @@ export default function CallbackPage() {
     if (processed) return
     
     const processCallback = async () => {
-      setProcessed(true)
       const urlParams = new URLSearchParams(window.location.search)
+      
+      // Check if we have any callback parameters at all
+      if (!urlParams.has('code') && !urlParams.has('error')) {
+        console.log('[CallbackPage] No callback parameters found, waiting...')
+        return
+      }
+      
       const code = urlParams.get('code')
       const state = urlParams.get('state')
       const error = urlParams.get('error')
 
+      console.log('[CallbackPage] Processing callback with params:', { code: code ? '<present>' : 'missing', state, error })
+      setProcessed(true)
+
       if (error) {
+        console.error('[CallbackPage] OAuth error in URL:', error)
         setStatus('error')
         setError(`OAuth error: ${error}`)
         return
       }
 
       if (!code) {
+        console.error('[CallbackPage] Missing authorization code')
         setStatus('error')
         setError('Missing authorization code')
         return
