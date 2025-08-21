@@ -354,6 +354,7 @@ func (s *OAuthService) generateAccessToken(userID, tenantID, clientID string, sc
 		Scopes:   scopes,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
+			Issuer:    "https://oauth2.imsc.eu",
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -406,6 +407,7 @@ func (s *OAuthService) generateIDToken(userID, tenantID, clientID string, scopes
 		Scopes:   user.Scopes, // Use user's actual database scopes instead of OAuth request scopes
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        tokenID,
+			Issuer:    "https://oauth2.imsc.eu",
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
