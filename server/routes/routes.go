@@ -220,6 +220,17 @@ func setupTenantRoutes(router *mux.Router, deps *Dependencies) {
 
 	// Registration route for specific tenant
 	tenantRouter.HandleFunc("/register", deps.UserHandler.RegisterUser).Methods("POST")
+
+	// API routes for specific tenant (needed for UserInfo endpoint)
+	setupTenantAPIRoutes(tenantRouter, deps)
+}
+
+// setupTenantAPIRoutes configures tenant-specific API routes
+func setupTenantAPIRoutes(tenantRouter *mux.Router, deps *Dependencies) {
+	tenantAPI := tenantRouter.PathPrefix("/api/v1").Subrouter()
+	
+	// UserInfo endpoint for OpenID Connect (required by Gitea)
+	tenantAPI.HandleFunc("/users/me", deps.UserHandler.GetCurrentUser).Methods("GET")
 }
 
 // setupTenantOAuthRoutes configures tenant-specific OAuth routes
