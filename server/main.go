@@ -1,17 +1,16 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
+	"oauth2-openid-server/autodiscovery"
 	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
 	"oauth2-openid-server/handlers"
 	"oauth2-openid-server/middleware"
+	"oauth2-openid-server/routes"
 	"oauth2-openid-server/services"
-
-	"github.com/gorilla/mux"
 )
 
 
@@ -87,173 +86,36 @@ func main() {
 	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService, cfg)
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
 	setupHandler := handlers.NewSetupHandler(setupService)
+	autodiscoveryHandler := autodiscovery.NewHandler()
 
-	router := mux.NewRouter()
+	// Setup all dependencies for routes
+	deps := &routes.Dependencies{
+		// Services
+		TenantService:     tenantService,
+		UserService:       userService,
+		GroupService:      groupService,
+		ClientService:     clientService,
+		ScopeService:      scopeService,
+		OAuthService:      oauthService,
+		SocialAuthService: socialAuthService,
+		TwoFactorService:  twoFactorService,
+		SetupService:      setupService,
 
-	// Setup endpoints (no middleware, available during initial setup)
-	router.HandleFunc("/api/setup/status", setupHandler.GetSetupStatus).Methods("GET")
-	router.HandleFunc("/api/setup/validate-token", setupHandler.ValidateSetupToken).Methods("POST")
-	router.HandleFunc("/api/setup/complete", setupHandler.PerformSetup).Methods("POST")
+		// Handlers
+		AuthHandler:          authHandler,
+		TenantHandler:        tenantHandler,
+		UserHandler:          userHandler,
+		GroupHandler:         groupHandler,
+		ClientHandler:        clientHandler,
+		ScopeHandler:         scopeHandler,
+		DashboardHandler:     dashboardHandler,
+		SocialAuthHandler:    socialAuthHandler,
+		TwoFactorHandler:     twoFactorHandler,
+		SetupHandler:         setupHandler,
+		AutodiscoveryHandler: autodiscoveryHandler,
+	}
 
-	// Apply tenant middleware to all API routes
-	api := router.PathPrefix("/api/v1").Subrouter()
-	api.Use(middleware.TenantMiddleware(tenantService))
-
-	// Tenant management endpoints (super admin only in production)
-	api.HandleFunc("/tenants", tenantHandler.CreateTenant).Methods("POST")
-	api.HandleFunc("/tenants", tenantHandler.GetTenants).Methods("GET")
-	api.HandleFunc("/tenants/{id}", tenantHandler.GetTenant).Methods("GET")
-	api.HandleFunc("/tenants/{id}", tenantHandler.UpdateTenant).Methods("PUT")
-	api.HandleFunc("/tenants/{id}", tenantHandler.DeleteTenant).Methods("DELETE")
-
-	// User management endpoints (tenant-scoped)
-	api.HandleFunc("/users", userHandler.CreateUser).Methods("POST")
-	api.HandleFunc("/users", userHandler.GetUsers).Methods("GET")
-	api.HandleFunc("/users/me", userHandler.GetCurrentUser).Methods("GET")
-	api.HandleFunc("/users/{id}", userHandler.GetUser).Methods("GET")
-	api.HandleFunc("/users/{id}", userHandler.UpdateUser).Methods("PUT")
-	api.HandleFunc("/users/{id}", userHandler.DeleteUser).Methods("DELETE")
-
-	// Public user registration endpoint (tenant-scoped but no auth required)
-	api.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
-
-	api.HandleFunc("/groups", groupHandler.CreateGroup).Methods("POST")
-	api.HandleFunc("/groups", groupHandler.GetGroups).Methods("GET")
-	api.HandleFunc("/groups/{id}", groupHandler.GetGroup).Methods("GET")
-	api.HandleFunc("/groups/{id}", groupHandler.UpdateGroup).Methods("PUT")
-	api.HandleFunc("/groups/{id}", groupHandler.DeleteGroup).Methods("DELETE")
-	api.HandleFunc("/groups/{id}/members", groupHandler.AddMember).Methods("POST")
-	api.HandleFunc("/groups/{id}/members/{userId}", groupHandler.RemoveMember).Methods("DELETE")
-	api.HandleFunc("/users/{userId}/groups", groupHandler.GetUserGroups).Methods("GET")
-
-	api.HandleFunc("/clients", clientHandler.CreateClient).Methods("POST")
-	api.HandleFunc("/clients", clientHandler.GetClients).Methods("GET")
-	api.HandleFunc("/clients/{id}", clientHandler.GetClient).Methods("GET")
-	api.HandleFunc("/clients/{id}", clientHandler.UpdateClient).Methods("PUT")
-	api.HandleFunc("/clients/{id}", clientHandler.DeleteClient).Methods("DELETE")
-	api.HandleFunc("/clients/{id}/activate", clientHandler.ActivateClient).Methods("PATCH")
-	api.HandleFunc("/clients/{id}/deactivate", clientHandler.DeactivateClient).Methods("PATCH")
-	api.HandleFunc("/clients/{id}/regenerate-secret", clientHandler.RegenerateSecret).Methods("POST")
-
-	api.HandleFunc("/scopes", scopeHandler.GetAllScopes).Methods("GET")
-	api.HandleFunc("/scopes", scopeHandler.CreateScope).Methods("POST")
-	api.HandleFunc("/scopes/{id}", scopeHandler.UpdateScope).Methods("PUT")
-	api.HandleFunc("/scopes/{id}", scopeHandler.DeleteScope).Methods("DELETE")
-	api.HandleFunc("/scopes/{id}", scopeHandler.HandleOptions).Methods("OPTIONS")
-
-	api.HandleFunc("/dashboard/stats", dashboardHandler.GetDashboardStats).Methods("GET")
-
-	// Two-factor authentication endpoints
-	api.HandleFunc("/2fa/setup", twoFactorHandler.SetupTwoFactor).Methods("POST")
-	api.HandleFunc("/2fa/enable", twoFactorHandler.EnableTwoFactor).Methods("POST")
-	api.HandleFunc("/2fa/disable", twoFactorHandler.DisableTwoFactor).Methods("POST")
-	api.HandleFunc("/2fa/verify", twoFactorHandler.VerifyTwoFactor).Methods("POST")
-	api.HandleFunc("/2fa/verify-session", twoFactorHandler.VerifySession).Methods("POST")
-	api.HandleFunc("/2fa/status", twoFactorHandler.GetTwoFactorStatus).Methods("GET")
-
-	// Social provider management endpoints
-	api.HandleFunc("/social/providers", socialAuthHandler.GetProviderConfigs).Methods("GET")
-	api.HandleFunc("/social/providers/{provider}", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
-	api.HandleFunc("/social/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
-
-	// Tenant-specific routes
-	tenantRouter := router.PathPrefix("/tenant/{tenantId}").Subrouter()
-	tenantRouter.Use(middleware.TenantMiddleware(tenantService))
-
-	// OAuth routes for specific tenant
-	tenantOAuth := tenantRouter.PathPrefix("/oauth").Subrouter()
-	tenantOAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]interface{}{
-			"message":   "OAuth2 Authorization Server",
-			"tenant_id": middleware.GetTenantIDFromRequest(r),
-			"endpoints": map[string]string{
-				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
-				"token_endpoint":         r.Host + r.RequestURI + "/token",
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}).Methods("GET")
-	tenantOAuth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
-	tenantOAuth.HandleFunc("/token", authHandler.Token).Methods("POST")
-
-	// Social authentication routes for specific tenant
-	tenantAuth := tenantRouter.PathPrefix("/auth").Subrouter()
-	tenantAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]interface{}{
-			"message":   "Social Authentication Service",
-			"tenant_id": middleware.GetTenantIDFromRequest(r),
-			"endpoints": map[string]string{
-				"providers_endpoint": r.Host + r.RequestURI + "/providers",
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}).Methods("GET")
-	tenantAuth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
-	tenantAuth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
-	tenantAuth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
-	tenantAuth.HandleFunc("/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
-	tenantAuth.HandleFunc("/{provider}/login", socialAuthHandler.InitiateSocialLogin).Methods("GET")
-	tenantAuth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
-	tenantAuth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
-
-	// Direct login route for specific tenant
-	tenantRouter.HandleFunc("/login", authHandler.Login).Methods("POST")
-
-	// Registration route for specific tenant
-	tenantRouter.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
-
-	// Legacy routes (backwards compatibility) - these will use default tenant
-	// OAuth routes with tenant middleware
-	oauth := router.PathPrefix("/oauth").Subrouter()
-	oauth.Use(middleware.TenantMiddleware(tenantService))
-	oauth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]interface{}{
-			"message":   "OAuth2 Authorization Server",
-			"tenant_id": middleware.GetTenantIDFromRequest(r),
-			"endpoints": map[string]string{
-				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
-				"token_endpoint":         r.Host + r.RequestURI + "/token",
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}).Methods("GET")
-	oauth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
-	oauth.HandleFunc("/token", authHandler.Token).Methods("POST")
-
-	// Social authentication routes with tenant middleware
-	auth := router.PathPrefix("/auth").Subrouter()
-	auth.Use(middleware.TenantMiddleware(tenantService))
-	auth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		response := map[string]interface{}{
-			"message":   "Social Authentication Service",
-			"tenant_id": middleware.GetTenantIDFromRequest(r),
-			"endpoints": map[string]string{
-				"providers_endpoint": r.Host + r.RequestURI + "/providers",
-			},
-		}
-		json.NewEncoder(w).Encode(response)
-	}).Methods("GET")
-	auth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
-	auth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
-	auth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
-	auth.HandleFunc("/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
-	auth.HandleFunc("/{provider}/login", socialAuthHandler.InitiateSocialLogin).Methods("GET")
-	auth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
-	auth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
-
-	// Direct login route with tenant middleware
-	loginRouter := router.PathPrefix("/login").Subrouter()
-	loginRouter.Use(middleware.TenantMiddleware(tenantService))
-	loginRouter.HandleFunc("", authHandler.Login).Methods("POST")
-
-	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	}).Methods("GET")
+	router := routes.SetupRoutes(deps)
 
 	log.Printf("Server starting on port %s", cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CorsMiddleware(router)))
