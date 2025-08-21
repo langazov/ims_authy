@@ -35,17 +35,21 @@ export default function CallbackPage() {
       try {
         await handleCallback(code, finalState)
         setStatus('success')
+        // Clear URL parameters to prevent re-processing
+        window.history.replaceState({}, document.title, window.location.pathname)
         setTimeout(() => {
           window.location.href = '/'
         }, 2000)
       } catch (err) {
         setStatus('error')
         setError(err instanceof Error ? err.message : 'Authentication failed')
+        // Clear URL parameters even on error to prevent loops
+        window.history.replaceState({}, document.title, window.location.pathname)
       }
     }
 
     processCallback()
-  }, [handleCallback])
+  }, [])
 
   const handleRetry = () => {
     window.location.href = '/'
