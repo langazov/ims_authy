@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -72,7 +73,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
-
+	log.Printf("Login:  User %s logging in from tenant %s", user.Email, tenantID)
+	log.Printf("Login: User ID: %s, Scopes: %v, Groups: %v", user.ID.Hex(), user.Scopes, user.Groups)
 	if !h.userService.ValidatePassword(user, loginReq.Password) {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
