@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 
@@ -106,13 +107,17 @@ func (h *SocialAuthHandler) InitiateSocialLogin(w http.ResponseWriter, r *http.R
 	}
 
 	// Store state in session/cookie for validation
+	// Detect if we're running behind HTTPS (either direct TLS or proxy)
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state_" + provider,
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		MaxAge:   600,   // 10 minutes
+		Secure:   isSecure,
+		SameSite: http.SameSiteLaxMode, // Allow cross-site requests for OAuth callbacks
+		MaxAge:   600,                  // 10 minutes
 	})
 
 	// Get authorization URL from social provider
@@ -163,12 +168,25 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 		println("Direct social login callback detected, state:", state)
 	} else {
 		// Validate state parameter against cookie for normal OAuth flow
-		cookie, err := r.Cookie("oauth_state_" + provider)
+		cookieName := "oauth_state_" + provider
+		cookie, err := r.Cookie(cookieName)
+		
+		// Debug logging for OAuth state validation
+		if err != nil {
+			log.Printf("OAuth state validation failed - cookie '%s' not found: %v", cookieName, err)
+			log.Printf("Available cookies: %v", r.Cookies())
+		} else {
+			log.Printf("OAuth state validation - cookie value: %s, received state: %s", cookie.Value, state)
+		}
+		
 		if err != nil || cookie.Value != state {
 			if state == "" {
+				log.Printf("OAuth callback error: Missing state parameter")
 				http.Error(w, "Missing authorization code or state parameter", http.StatusBadRequest)
 				return
 			}
+			log.Printf("OAuth callback error: Invalid state parameter. Expected: %s, Got: %s", 
+				func() string { if cookie != nil { return cookie.Value } else { return "<cookie not found>" } }(), state)
 			http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 			return
 		}
@@ -176,11 +194,17 @@ func (h *SocialAuthHandler) HandleSocialCallback(w http.ResponseWriter, r *http.
 
 	// Clear the state cookie (only if not direct social login)
 	if state != "direct-social-login" {
+		// Use same security settings for consistency
+		isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+		
 		http.SetCookie(w, &http.Cookie{
-			Name:   "oauth_state_" + provider,
-			Value:  "",
-			Path:   "/",
-			MaxAge: -1,
+			Name:     "oauth_state_" + provider,
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   isSecure,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   -1, // Delete the cookie
 		})
 	}
 
