@@ -8,40 +8,63 @@ export default function CallbackPage() {
   const { handleCallback } = useAuth()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [error, setError] = useState<string>('')
+  const [processed, setProcessed] = useState(false)
 
   useEffect(() => {
+    if (processed) return
+    
     const processCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search)
+      
+      // Check if we have any callback parameters at all
+      if (!urlParams.has('code') && !urlParams.has('error')) {
+        console.log('[CallbackPage] No callback parameters found, waiting...')
+        return
+      }
+      
       const code = urlParams.get('code')
       const state = urlParams.get('state')
       const error = urlParams.get('error')
 
+      console.log('[CallbackPage] Processing callback with params:', { code: code ? '<present>' : 'missing', state, error })
+      setProcessed(true)
+
       if (error) {
+        console.error('[CallbackPage] OAuth error in URL:', error)
         setStatus('error')
         setError(`OAuth error: ${error}`)
         return
       }
 
-      if (!code || !state) {
+      if (!code) {
+        console.error('[CallbackPage] Missing authorization code')
         setStatus('error')
-        setError('Missing authorization code or state parameter')
+        setError('Missing authorization code')
         return
       }
 
+      // State parameter is optional for direct social login
+      // If no state, generate a temporary one for the callback handler
+      const finalState = state || 'direct-social-login'
+
       try {
-        await handleCallback(code, state)
+        await handleCallback(code, finalState)
         setStatus('success')
+        // Clear URL parameters to prevent re-processing
+        window.history.replaceState({}, document.title, window.location.pathname)
         setTimeout(() => {
           window.location.href = '/'
         }, 2000)
       } catch (err) {
         setStatus('error')
         setError(err instanceof Error ? err.message : 'Authentication failed')
+        // Clear URL parameters even on error to prevent loops
+        window.history.replaceState({}, document.title, window.location.pathname)
       }
     }
 
     processCallback()
-  }, [handleCallback])
+  }, [])
 
   const handleRetry = () => {
     window.location.href = '/'

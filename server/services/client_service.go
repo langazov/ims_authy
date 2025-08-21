@@ -47,7 +47,7 @@ func (s *ClientService) CreateClient(client *models.Client) error {
 	return err
 }
 
-func (s *ClientService) GetClientByID(id string) (*models.Client, error) {
+func (s *ClientService) GetClientByID(id, tenantID string) (*models.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -56,8 +56,13 @@ func (s *ClientService) GetClientByID(id string) (*models.Client, error) {
 		return nil, err
 	}
 
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var client models.Client
-	err = s.collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&client)
+	err = s.collection.FindOne(ctx, filter).Decode(&client)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("client not found")
@@ -68,12 +73,17 @@ func (s *ClientService) GetClientByID(id string) (*models.Client, error) {
 	return &client, nil
 }
 
-func (s *ClientService) GetClientByClientID(clientID string) (*models.Client, error) {
+func (s *ClientService) GetClientByClientID(clientID, tenantID string) (*models.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	filter := bson.M{"client_id": clientID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var client models.Client
-	err := s.collection.FindOne(ctx, bson.M{"client_id": clientID}).Decode(&client)
+	err := s.collection.FindOne(ctx, filter).Decode(&client)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("client not found")
@@ -84,11 +94,16 @@ func (s *ClientService) GetClientByClientID(clientID string) (*models.Client, er
 	return &client, nil
 }
 
-func (s *ClientService) GetAllClients() ([]*models.Client, error) {
+func (s *ClientService) GetAllClients(tenantID string) ([]*models.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.collection.Find(ctx, bson.M{})
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +114,16 @@ func (s *ClientService) GetAllClients() ([]*models.Client, error) {
 	return clients, err
 }
 
-func (s *ClientService) GetActiveClients() ([]*models.Client, error) {
+func (s *ClientService) GetActiveClients(tenantID string) ([]*models.Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.collection.Find(ctx, bson.M{"active": true})
+	filter := bson.M{"active": true}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -114,13 +134,18 @@ func (s *ClientService) GetActiveClients() ([]*models.Client, error) {
 	return clients, err
 }
 
-func (s *ClientService) UpdateClient(id string, client *models.Client) error {
+func (s *ClientService) UpdateClient(id, tenantID string, client *models.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return err
+	}
+
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
 	}
 
 	client.UpdatedAt = time.Now()
@@ -134,7 +159,7 @@ func (s *ClientService) UpdateClient(id string, client *models.Client) error {
 		"updated_at":    client.UpdatedAt,
 	}}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -146,7 +171,7 @@ func (s *ClientService) UpdateClient(id string, client *models.Client) error {
 	return nil
 }
 
-func (s *ClientService) DeleteClient(id string) error {
+func (s *ClientService) DeleteClient(id, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -155,7 +180,12 @@ func (s *ClientService) DeleteClient(id string) error {
 		return err
 	}
 
-	result, err := s.collection.DeleteOne(ctx, bson.M{"_id": objID})
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	result, err := s.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -167,15 +197,15 @@ func (s *ClientService) DeleteClient(id string) error {
 	return nil
 }
 
-func (s *ClientService) ActivateClient(id string) error {
-	return s.updateClientStatus(id, true)
+func (s *ClientService) ActivateClient(id, tenantID string) error {
+	return s.updateClientStatus(id, tenantID, true)
 }
 
-func (s *ClientService) DeactivateClient(id string) error {
-	return s.updateClientStatus(id, false)
+func (s *ClientService) DeactivateClient(id, tenantID string) error {
+	return s.updateClientStatus(id, tenantID, false)
 }
 
-func (s *ClientService) updateClientStatus(id string, active bool) error {
+func (s *ClientService) updateClientStatus(id, tenantID string, active bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -184,12 +214,17 @@ func (s *ClientService) updateClientStatus(id string, active bool) error {
 		return err
 	}
 
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	update := bson.M{"$set": bson.M{
 		"active":     active,
 		"updated_at": time.Now(),
 	}}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -201,7 +236,7 @@ func (s *ClientService) updateClientStatus(id string, active bool) error {
 	return nil
 }
 
-func (s *ClientService) RegenerateClientSecret(id string) (string, error) {
+func (s *ClientService) RegenerateClientSecret(id, tenantID string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -210,13 +245,18 @@ func (s *ClientService) RegenerateClientSecret(id string) (string, error) {
 		return "", err
 	}
 
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	newSecret := s.generateClientSecret()
 	update := bson.M{"$set": bson.M{
 		"client_secret": newSecret,
 		"updated_at":    time.Now(),
 	}}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return "", err
 	}
@@ -228,8 +268,8 @@ func (s *ClientService) RegenerateClientSecret(id string) (string, error) {
 	return newSecret, nil
 }
 
-func (s *ClientService) ValidateRedirectURI(clientID, redirectURI string) error {
-	client, err := s.GetClientByClientID(clientID)
+func (s *ClientService) ValidateRedirectURI(clientID, redirectURI, tenantID string) error {
+	client, err := s.GetClientByClientID(clientID, tenantID)
 	if err != nil {
 		return err
 	}
@@ -247,8 +287,8 @@ func (s *ClientService) ValidateRedirectURI(clientID, redirectURI string) error 
 	return errors.New("invalid redirect URI")
 }
 
-func (s *ClientService) ValidateScope(clientID string, requestedScopes []string) error {
-	client, err := s.GetClientByClientID(clientID)
+func (s *ClientService) ValidateScope(clientID, tenantID string, requestedScopes []string) error {
+	client, err := s.GetClientByClientID(clientID, tenantID)
 	if err != nil {
 		return err
 	}

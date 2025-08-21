@@ -88,7 +88,7 @@ Get MongoDB URI
 */}}
 {{- define "oauth2-server.mongodbUri" -}}
 {{- if .Values.mongodb.enabled }}
-{{- printf "mongodb://%s:%s@%s-mongodb:27017/%s?authSource=admin" .Values.mongodb.auth.rootUsername .Values.mongodb.auth.rootPassword (include "oauth2-server.fullname" .) .Values.mongodb.auth.database }}
+{{- printf "mongodb://%s:%s@%s:27017/%s?authSource=admin" .Values.mongodb.auth.rootUsername .Values.mongodb.auth.rootPassword  .Values.config.database.host .Values.mongodb.auth.database }}
 {{- else }}
 {{- if .Values.externalMongodb.auth.enabled }}
 {{- printf "mongodb://%s:%s@%s:%v/%s?authSource=%s" .Values.externalMongodb.auth.username .Values.externalMongodb.auth.password .Values.externalMongodb.host .Values.externalMongodb.port .Values.externalMongodb.database .Values.externalMongodb.auth.authSource }}

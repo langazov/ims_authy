@@ -11,6 +11,10 @@ import { Copy, ExternalLink, Settings, Eye, EyeOff, CheckCircle, XCircle, Info }
 import { toast } from 'sonner'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
+import { apiClient } from '@/lib/api'
+import { TenantUrlBuilder } from '@/lib/tenantUrls'
+import { useTenant } from '@/contexts/TenantContext'
+import { config } from '@/lib/config'
 
 interface SocialProvider {
   id: string
@@ -33,7 +37,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/google/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/google/callback`,
     scopes: ['openid', 'profile', 'email'],
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
@@ -46,7 +50,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/github/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/github/callback`,
     scopes: ['user:email'],
     authUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
@@ -59,7 +63,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/facebook/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/facebook/callback`,
     scopes: ['email', 'public_profile'],
     authUrl: 'https://www.facebook.com/v18.0/dialog/oauth',
     tokenUrl: 'https://graph.facebook.com/v18.0/oauth/access_token',
@@ -72,7 +76,7 @@ const defaultProviders: SocialProvider[] = [
     enabled: true,
     clientId: '',
     clientSecret: '',
-    redirectUrl: 'http://localhost:8080/auth/apple/callback',
+    redirectUrl: `${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/apple/callback`,
     scopes: ['name', 'email'],
     authUrl: 'https://appleid.apple.com/auth/authorize',
     tokenUrl: 'https://appleid.apple.com/auth/token',
@@ -115,7 +119,7 @@ const setupGuides = {
       'Create a new project or select existing one',
       'Enable Google+ API',
       'Go to Credentials → Create OAuth 2.0 Client ID',
-      'Set authorized redirect URI to: http://localhost:8080/auth/google/callback',
+      `Set authorized redirect URI to: ${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/google/callback`,
       'Copy Client ID and Client Secret'
     ],
     docsUrl: 'https://developers.google.com/identity/protocols/oauth2'
@@ -125,7 +129,7 @@ const setupGuides = {
     steps: [
       'Go to GitHub Settings → Developer settings',
       'Click "New OAuth App"',
-      'Set Authorization callback URL to: http://localhost:8080/auth/github/callback',
+      `Set Authorization callback URL to: ${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/github/callback`,
       'Register application',
       'Copy Client ID and generate Client Secret'
     ],
@@ -137,7 +141,7 @@ const setupGuides = {
       'Go to Facebook for Developers (developers.facebook.com)',
       'Create a new app',
       'Add Facebook Login product',
-      'Set Valid OAuth Redirect URI to: http://localhost:8080/auth/facebook/callback',
+      `Set Valid OAuth Redirect URI to: ${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/facebook/callback`,
       'Copy App ID and App Secret'
     ],
     docsUrl: 'https://developers.facebook.com/docs/facebook-login'
@@ -148,7 +152,7 @@ const setupGuides = {
       'Go to Apple Developer Account',
       'Create a Services ID',
       'Configure Sign In with Apple',
-      'Set Return URL to: http://localhost:8080/auth/apple/callback',
+      `Set Return URL to: ${import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu'}/auth/apple/callback`,
       'Generate private key and create JWT client secret'
     ],
     docsUrl: 'https://developer.apple.com/documentation/sign_in_with_apple'
@@ -157,11 +161,40 @@ const setupGuides = {
 
 export default function SocialLoginSetup() {
   const { isAdmin } = usePermissions()
+  const { activeTenant } = useTenant()
   const [providers, setProviders] = useState<SocialProvider[]>(defaultProviders)
   const [selectedProvider, setSelectedProvider] = useState<SocialProvider | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [showSecrets, setShowSecrets] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+
+  // Generate tenant-aware callback URLs
+  const getTenantCallbackUrl = (providerId: string): string => {
+    if (activeTenant?.id) {
+      return TenantUrlBuilder.buildTenantSocialCallbackUrl(activeTenant.id, providerId)
+    }
+    return TenantUrlBuilder.buildLegacySocialCallbackUrl(providerId)
+  }
+
+  // Generate dynamic setup instructions with tenant-aware callback URLs
+  const getSetupInstructions = (providerId: string) => {
+    const callbackUrl = getTenantCallbackUrl(providerId)
+    const baseInstructions = setupGuides[providerId as keyof typeof setupGuides]
+    
+    return {
+      ...baseInstructions,
+      steps: baseInstructions.steps.map(step => {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://oauth2.imsc.eu';
+        const authBaseUrl = `${apiBaseUrl}/auth/`;
+        const escapedUrl = authBaseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`${escapedUrl}\\w+\\/callback`, 'g');
+        
+        return step.includes(authBaseUrl) 
+          ? step.replace(regex, callbackUrl)
+          : step;
+      })
+    }
+  }
 
   // Check permissions - only admin can manage social login setup
   if (!isAdmin()) {
@@ -174,15 +207,17 @@ export default function SocialLoginSetup() {
     )
   }
 
-  // Fetch provider configurations from backend
+  // Fetch provider configurations from backend (filtered by activeTenantId)
   useEffect(() => {
     const fetchProviders = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/v1/social/providers')
-        if (response.ok) {
-          const backendProviders = await response.json()
-          setProviders(backendProviders)
-        }
+        const backendProviders = await apiClient.socialProviders.getAll()
+        // Update providers with tenant-aware callback URLs
+        const providersWithTenantCallbacks = backendProviders.map((provider: SocialProvider) => ({
+          ...provider,
+          redirectUrl: getTenantCallbackUrl(provider.id)
+        }))
+        setProviders(providersWithTenantCallbacks)
       } catch (error) {
         console.error('Failed to fetch provider configurations:', error)
         toast.error('Failed to load provider configurations')
@@ -192,7 +227,7 @@ export default function SocialLoginSetup() {
     }
 
     fetchProviders()
-  }, [])
+  }, [activeTenant?.id])
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -213,30 +248,26 @@ export default function SocialLoginSetup() {
 
   const handleProviderUpdate = async (updatedProvider: SocialProvider) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/social/providers/${updatedProvider.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          enabled: updatedProvider.enabled,
-          clientId: updatedProvider.clientId,
-          clientSecret: updatedProvider.clientSecret,
-          redirectUrl: updatedProvider.redirectUrl,
-        }),
+      // Ensure we're using the tenant-aware callback URL
+      const tenantCallbackUrl = getTenantCallbackUrl(updatedProvider.id)
+      await apiClient.socialProviders.update(updatedProvider.id, {
+        enabled: updatedProvider.enabled,
+        clientId: updatedProvider.clientId,
+        clientSecret: updatedProvider.clientSecret,
+        redirectUrl: tenantCallbackUrl,
       })
 
-      if (response.ok) {
-        setProviders(prev => prev.map(p => 
-          p.id === updatedProvider.id 
-            ? { ...updatedProvider, configured: !!(updatedProvider.clientId && updatedProvider.clientSecret) }
-            : p
-        ))
-        setIsDialogOpen(false)
-        toast.success(`${updatedProvider.name} configuration updated`)
-      } else {
-        toast.error('Failed to update provider configuration')
-      }
+      setProviders(prev => prev.map(p => 
+        p.id === updatedProvider.id 
+          ? { 
+              ...updatedProvider, 
+              redirectUrl: tenantCallbackUrl,
+              configured: !!(updatedProvider.clientId && updatedProvider.clientSecret) 
+            }
+          : p
+      ))
+      setIsDialogOpen(false)
+      toast.success(`${updatedProvider.name} configuration updated`)
     } catch (error) {
       console.error('Failed to update provider:', error)
       toast.error('Failed to update provider configuration')
@@ -251,11 +282,7 @@ export default function SocialLoginSetup() {
 
   const testProviderConfig = async (providerId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/social/providers/${providerId}/test`, {
-        method: 'POST',
-      })
-      
-      const result = await response.json()
+      const result = await apiClient.socialProviders.test(providerId)
       
       if (result.success) {
         toast.success(`${providerId} configuration is valid`)
@@ -482,6 +509,33 @@ export default function SocialLoginSetup() {
                     <Copy size={12} />
                   </Button>
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-medium text-muted-foreground">Login Initiation URL</Label>
+                <div className="flex items-center space-x-2 mt-1">
+                  <code className="text-xs bg-muted px-2 py-1 rounded flex-1">
+                    {activeTenant?.id 
+                      ? `${TenantUrlBuilder.buildTenantUrl(activeTenant.id, `/auth/${provider.id}/login`)}`
+                      : `${config.apiBaseUrl}/auth/${provider.id}/login`
+                    }
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(
+                      activeTenant?.id 
+                        ? `${TenantUrlBuilder.buildTenantUrl(activeTenant.id, `/auth/${provider.id}/login`)}`
+                        : `${config.apiBaseUrl}/auth/${provider.id}/login`,
+                      'Login Initiation URL'
+                    )}
+                  >
+                    <Copy size={12} />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use this URL to initiate social login for this tenant
+                </p>
               </div>
 
               <div className="pt-2 border-t">

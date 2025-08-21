@@ -37,7 +37,7 @@ func (s *GroupService) CreateGroup(group *models.Group) error {
 	return err
 }
 
-func (s *GroupService) GetGroupByID(id string) (*models.Group, error) {
+func (s *GroupService) GetGroupByID(id, tenantID string) (*models.Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -46,8 +46,13 @@ func (s *GroupService) GetGroupByID(id string) (*models.Group, error) {
 		return nil, err
 	}
 
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var group models.Group
-	err = s.collection.FindOne(ctx, bson.M{"_id": objID}).Decode(&group)
+	err = s.collection.FindOne(ctx, filter).Decode(&group)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("group not found")
@@ -58,12 +63,17 @@ func (s *GroupService) GetGroupByID(id string) (*models.Group, error) {
 	return &group, nil
 }
 
-func (s *GroupService) GetGroupByName(name string) (*models.Group, error) {
+func (s *GroupService) GetGroupByName(name, tenantID string) (*models.Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	filter := bson.M{"name": name}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	var group models.Group
-	err := s.collection.FindOne(ctx, bson.M{"name": name}).Decode(&group)
+	err := s.collection.FindOne(ctx, filter).Decode(&group)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, errors.New("group not found")
@@ -74,11 +84,16 @@ func (s *GroupService) GetGroupByName(name string) (*models.Group, error) {
 	return &group, nil
 }
 
-func (s *GroupService) GetAllGroups() ([]*models.Group, error) {
+func (s *GroupService) GetAllGroups(tenantID string) ([]*models.Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.collection.Find(ctx, bson.M{})
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +104,18 @@ func (s *GroupService) GetAllGroups() ([]*models.Group, error) {
 	return groups, err
 }
 
-func (s *GroupService) UpdateGroup(id string, group *models.Group) error {
+func (s *GroupService) UpdateGroup(id, tenantID string, group *models.Group) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return err
+	}
+
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
 	}
 
 	group.UpdatedAt = time.Now()
@@ -107,7 +127,7 @@ func (s *GroupService) UpdateGroup(id string, group *models.Group) error {
 		"updated_at":  group.UpdatedAt,
 	}}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -119,7 +139,7 @@ func (s *GroupService) UpdateGroup(id string, group *models.Group) error {
 	return nil
 }
 
-func (s *GroupService) DeleteGroup(id string) error {
+func (s *GroupService) DeleteGroup(id, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -128,7 +148,12 @@ func (s *GroupService) DeleteGroup(id string) error {
 		return err
 	}
 
-	result, err := s.collection.DeleteOne(ctx, bson.M{"_id": objID})
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	result, err := s.collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return err
 	}
@@ -140,13 +165,18 @@ func (s *GroupService) DeleteGroup(id string) error {
 	return nil
 }
 
-func (s *GroupService) AddMemberToGroup(groupID, userID string) error {
+func (s *GroupService) AddMemberToGroup(groupID, userID, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	objID, err := primitive.ObjectIDFromHex(groupID)
 	if err != nil {
 		return err
+	}
+
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
 	}
 
 	update := bson.M{
@@ -154,7 +184,7 @@ func (s *GroupService) AddMemberToGroup(groupID, userID string) error {
 		"$set":      bson.M{"updated_at": time.Now()},
 	}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -166,7 +196,7 @@ func (s *GroupService) AddMemberToGroup(groupID, userID string) error {
 	return nil
 }
 
-func (s *GroupService) RemoveMemberFromGroup(groupID, userID string) error {
+func (s *GroupService) RemoveMemberFromGroup(groupID, userID, tenantID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -175,12 +205,17 @@ func (s *GroupService) RemoveMemberFromGroup(groupID, userID string) error {
 		return err
 	}
 
+	filter := bson.M{"_id": objID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
 	update := bson.M{
 		"$pull": bson.M{"members": userID},
 		"$set":  bson.M{"updated_at": time.Now()},
 	}
 
-	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+	result, err := s.collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
@@ -192,11 +227,16 @@ func (s *GroupService) RemoveMemberFromGroup(groupID, userID string) error {
 	return nil
 }
 
-func (s *GroupService) GetGroupsByUser(userID string) ([]*models.Group, error) {
+func (s *GroupService) GetGroupsByUser(userID, tenantID string) ([]*models.Group, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := s.collection.Find(ctx, bson.M{"members": userID})
+	filter := bson.M{"members": userID}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -205,4 +245,97 @@ func (s *GroupService) GetGroupsByUser(userID string) ([]*models.Group, error) {
 	var groups []*models.Group
 	err = cursor.All(ctx, &groups)
 	return groups, err
+}
+
+func (s *GroupService) InitializeDefaultGroups(tenantID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Check if any groups already exist for this tenant
+	filter := bson.M{}
+	if tenantID != "" {
+		filter["tenant_id"] = tenantID
+	}
+	
+	count, err := s.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	// Only initialize if no groups exist for this tenant
+	if count > 0 {
+		return nil
+	}
+
+	defaultGroups := []*models.Group{
+		{
+			Name:        "Administrators",
+			Description: "System administrators with full access",
+			TenantID:    tenantID,
+			Scopes: []string{
+				"admin", "admin:system", "user_management", "client_management",
+				"read", "write", "read:profile", "write:profile",
+				"read:users", "write:users", "delete:users",
+				"read:groups", "write:groups", "delete:groups",
+				"read:clients", "write:clients", "delete:clients",
+			},
+			Members: []string{},
+		},
+		{
+			Name:        "User Managers",
+			Description: "Users who can manage other users and groups",
+			TenantID:    tenantID,
+			Scopes: []string{
+				"user_management", "read", "write",
+				"read:profile", "write:profile",
+				"read:users", "write:users",
+				"read:groups", "write:groups",
+			},
+			Members: []string{},
+		},
+		{
+			Name:        "Client Managers",
+			Description: "Users who can manage OAuth clients",
+			TenantID:    tenantID,
+			Scopes: []string{
+				"client_management", "read", "write",
+				"read:profile", "write:profile",
+				"read:clients", "write:clients",
+			},
+			Members: []string{},
+		},
+		{
+			Name:        "Standard Users",
+			Description: "Regular users with basic access",
+			TenantID:    tenantID,
+			Scopes: []string{
+				"read", "openid", "profile", "email",
+				"read:profile", "write:profile",
+			},
+			Members: []string{},
+		},
+		{
+			Name:        "Read Only",
+			Description: "Users with read-only access",
+			TenantID:    tenantID,
+			Scopes: []string{
+				"read", "openid", "profile", "email",
+				"read:profile",
+			},
+			Members: []string{},
+		},
+	}
+
+	now := time.Now()
+	for _, group := range defaultGroups {
+		group.ID = primitive.NewObjectID()
+		group.CreatedAt = now
+		group.UpdatedAt = now
+		
+		if err := s.CreateGroup(group); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

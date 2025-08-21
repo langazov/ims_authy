@@ -73,11 +73,11 @@ src/
 ## 🎯 Live Demo Available
 
 ### Access the Frontend
-- **URL**: http://localhost:80
+- **URL**: https://authy.imsc.eu
 - **Test User**: test@example.com / password123
 
 ### Complete User Journey
-1. **Visit** http://localhost:80
+1. **Visit** https://authy.imsc.eu
 2. **Login** with test credentials
 3. **Navigate** to "Profile" tab
 4. **Click** "Enable 2FA" to see the setup flow
@@ -168,4 +168,4 @@ The two-factor authentication frontend is now **fully implemented** and ready fo
 4. **Use backup codes** for account recovery
 5. **Enjoy a seamless** authentication experience
 
-**Visit http://localhost:80 to experience the complete 2FA implementation!** 🎉
+**Visit https://authy.imsc.eu to experience the complete 2FA implementation!** 🎉

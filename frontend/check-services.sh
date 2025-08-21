@@ -45,7 +45,7 @@ echo "OAuth2 Server (Port 8080):"
 check_port 8080
 if [ $? -eq 0 ]; then
     echo "   Testing health endpoint..."
-    if curl -s http://localhost:8080/health > /dev/null; then
+    if curl -s https://oauth2.imsc.eu/health > /dev/null; then
         echo "   ✅ Health check passed"
     else
         echo "   ⚠️  Health check failed"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
 
@@ -48,6 +49,8 @@ func (h *ClientHandler) CreateClient(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
 	var createReq CreateClientRequest
 	if err := json.NewDecoder(r.Body).Decode(&createReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -70,6 +73,7 @@ func (h *ClientHandler) CreateClient(w http.ResponseWriter, r *http.Request) {
 		RedirectURIs: createReq.RedirectURIs,
 		Scopes:       createReq.Scopes,
 		GrantTypes:   createReq.GrantTypes,
+		TenantID:     tenantID,
 	}
 
 	if client.Scopes == nil {
@@ -102,15 +106,16 @@ func (h *ClientHandler) GetClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := middleware.GetTenantIDFromRequest(r)
 	activeOnly := r.URL.Query().Get("active") == "true"
 
 	var clients []*models.Client
 	var err error
 
 	if activeOnly {
-		clients, err = h.clientService.GetActiveClients()
+		clients, err = h.clientService.GetActiveClients(tenantID)
 	} else {
-		clients, err = h.clientService.GetAllClients()
+		clients, err = h.clientService.GetAllClients(tenantID)
 	}
 
 	if err != nil {
@@ -138,8 +143,9 @@ func (h *ClientHandler) GetClient(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	client, err := h.clientService.GetClientByID(clientID)
+	client, err := h.clientService.GetClientByID(clientID, tenantID)
 	if err != nil {
 		http.Error(w, "Client not found", http.StatusNotFound)
 		return
@@ -159,6 +165,7 @@ func (h *ClientHandler) UpdateClient(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
 	var updateReq UpdateClientRequest
 	if err := json.NewDecoder(r.Body).Decode(&updateReq); err != nil {
@@ -192,12 +199,12 @@ func (h *ClientHandler) UpdateClient(w http.ResponseWriter, r *http.Request) {
 		client.GrantTypes = []string{"authorization_code", "refresh_token"}
 	}
 
-	if err := h.clientService.UpdateClient(clientID, client); err != nil {
+	if err := h.clientService.UpdateClient(clientID, tenantID, client); err != nil {
 		http.Error(w, "Failed to update client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	updatedClient, err := h.clientService.GetClientByID(clientID)
+	updatedClient, err := h.clientService.GetClientByID(clientID, tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get updated client", http.StatusInternalServerError)
 		return
@@ -217,8 +224,9 @@ func (h *ClientHandler) DeleteClient(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	if err := h.clientService.DeleteClient(clientID); err != nil {
+	if err := h.clientService.DeleteClient(clientID, tenantID); err != nil {
 		http.Error(w, "Failed to delete client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -234,8 +242,9 @@ func (h *ClientHandler) ActivateClient(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	if err := h.clientService.ActivateClient(clientID); err != nil {
+	if err := h.clientService.ActivateClient(clientID, tenantID); err != nil {
 		http.Error(w, "Failed to activate client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -252,8 +261,9 @@ func (h *ClientHandler) DeactivateClient(w http.ResponseWriter, r *http.Request)
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	if err := h.clientService.DeactivateClient(clientID); err != nil {
+	if err := h.clientService.DeactivateClient(clientID, tenantID); err != nil {
 		http.Error(w, "Failed to deactivate client: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -270,8 +280,9 @@ func (h *ClientHandler) RegenerateSecret(w http.ResponseWriter, r *http.Request)
 
 	vars := mux.Vars(r)
 	clientID := vars["id"]
+	tenantID := middleware.GetTenantIDFromRequest(r)
 
-	newSecret, err := h.clientService.RegenerateClientSecret(clientID)
+	newSecret, err := h.clientService.RegenerateClientSecret(clientID, tenantID)
 	if err != nil {
 		http.Error(w, "Failed to regenerate client secret: "+err.Error(), http.StatusInternalServerError)
 		return

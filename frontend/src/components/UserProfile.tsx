@@ -6,9 +6,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Shield, ShieldCheck, ShieldOff, Settings, AlertTriangle } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { config } from '@/lib/config'
 import TwoFactorSetup from './TwoFactorSetup'
 import { useToast } from '@/hooks/use-toast'
+import { apiClient } from '@/lib/api'
 
 interface TwoFactorStatus {
   enabled: boolean
@@ -33,11 +33,8 @@ export default function UserProfile() {
     if (!user?.id) return
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/api/v1/2fa/status?user_id=${user.id}`)
-      if (response.ok) {
-        const status: TwoFactorStatus = await response.json()
-        setTwoFactorStatus(status)
-      }
+      const status: TwoFactorStatus = await apiClient.twoFactor.getStatus(user.id)
+      setTwoFactorStatus(status)
     } catch (err) {
       console.error('Failed to fetch 2FA status:', err)
     } finally {
@@ -52,23 +49,12 @@ export default function UserProfile() {
     setError('')
 
     try {
-      const response = await fetch(`${config.apiBaseUrl}/api/v1/2fa/disable`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ user_id: user.id }),
+      await apiClient.twoFactor.disable({ user_id: user.id })
+      setTwoFactorStatus({ enabled: false })
+      toast({
+        title: "Success",
+        description: "Two-factor authentication has been disabled.",
       })
-
-      if (response.ok) {
-        setTwoFactorStatus({ enabled: false })
-        toast({
-          title: "Success",
-          description: "Two-factor authentication has been disabled.",
-        })
-      } else {
-        throw new Error('Failed to disable two-factor authentication')
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {

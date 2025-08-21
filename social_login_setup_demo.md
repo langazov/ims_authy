@@ -49,7 +49,7 @@ POST   /api/v1/social/providers/{id}/test // Test provider config
   "enabled": true,
   "clientId": "your-client-id",
   "clientSecret": "your-client-secret",
-  "redirectUrl": "http://localhost:8080/auth/google/callback",
+  "redirectUrl": "https://oauth2.imsc.eu/auth/google/callback",
   "scopes": ["openid", "profile", "email"],
   "configured": true
 }
@@ -78,7 +78,7 @@ POST   /api/v1/social/providers/{id}/test // Test provider config
 │  Status: Active        Scopes: openid, profile     │
 │  Client ID: ******.apps.googleusercontent.com      │
 │  Client Secret: ••••••••••••••••                  │ 
-│  Redirect: http://localhost:8080/auth/google/...   │
+│  Redirect: https://oauth2.imsc.eu/auth/google/...   │
 │                                                     │
 │  [📚 Setup Guide]                                  │
 └─────────────────────────────────────────────────────┘

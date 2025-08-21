@@ -77,7 +77,7 @@ This script will:
 ### 2. Access the Application
 
 - Frontend: http://localhost:5173
-- OAuth2 Server: http://localhost:8080
+- OAuth2 Server: https://oauth2.imsc.eu
 - MongoDB: localhost:27017
 
 ### 3. Test Credentials
@@ -101,7 +101,7 @@ This script will:
 Create `.env` file with:
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080
+VITE_API_BASE_URL=https://oauth2.imsc.eu
 VITE_OAUTH_CLIENT_ID=frontend-client
 VITE_OAUTH_REDIRECT_URI=http://localhost:5173/callback
 ```

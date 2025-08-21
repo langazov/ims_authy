@@ -1,33 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
 	"oauth2-openid-server/handlers"
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 
 	"github.com/gorilla/mux"
 )
 
-// CORS middleware
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
 
 func main() {
 	cfg, err := config.Load()
@@ -41,6 +27,7 @@ func main() {
 	}
 	defer db.Close()
 
+	tenantService := services.NewTenantService(db)
 	userService := services.NewUserService(db)
 	groupService := services.NewGroupService(db)
 	clientService := services.NewClientService(db)
@@ -49,36 +36,86 @@ func main() {
 	socialAuthService := services.NewSocialAuthService(userService, db)
 	twoFactorService := services.NewTwoFactorService(db)
 
-	// Initialize default scopes if none exist
-	if err := scopeService.InitializeDefaultScopes(); err != nil {
-		log.Printf("Warning: Failed to initialize default scopes: %v", err)
+	// Initialize default social providers service
+	socialProviderService := services.NewSocialProviderService(db)
+
+	// Create setup service
+	setupService := services.NewSetupService(db, tenantService, userService, scopeService, groupService, socialProviderService, clientService)
+
+	// Check if initial setup is required
+	setupRequired, err := setupService.IsSetupRequired()
+	if err != nil {
+		log.Fatal("Failed to check setup status:", err)
 	}
 
-	// Initialize default social providers if none exist
-	socialProviderService := services.NewSocialProviderService(db)
-	if err := socialProviderService.InitializeDefaultProviders(); err != nil {
-		log.Printf("Warning: Failed to initialize default social providers: %v", err)
+	if setupRequired {
+		log.Printf("Database is empty - Initial setup required")
+		if _, err := setupService.GenerateSetupToken(); err != nil {
+			log.Fatal("Failed to generate setup token:", err)
+		}
+	} else {
+		// Initialize default tenant if none exist (backwards compatibility)
+		if err := tenantService.InitializeDefaultTenant(); err != nil {
+			log.Printf("Warning: Failed to initialize default tenant: %v", err)
+		}
+	}
+
+	if !setupRequired {
+		// Initialize default scopes if none exist for default tenant
+		if err := scopeService.InitializeDefaultScopes(""); err != nil {
+			log.Printf("Warning: Failed to initialize default scopes: %v", err)
+		}
+
+		// Initialize default groups if none exist for default tenant
+		if err := groupService.InitializeDefaultGroups(""); err != nil {
+			log.Printf("Warning: Failed to initialize default groups: %v", err)
+		}
+
+		// Initialize default social providers if none exist for default tenant
+		if err := socialProviderService.InitializeDefaultProviders(""); err != nil {
+			log.Printf("Warning: Failed to initialize default social providers: %v", err)
+		}
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
-	userHandler := handlers.NewUserHandler(userService)
+	tenantHandler := handlers.NewTenantHandler(tenantService, socialProviderService, scopeService, groupService)
+	userHandler := handlers.NewUserHandler(userService, tenantService, groupService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	clientHandler := handlers.NewClientHandler(clientService)
 	scopeHandler := handlers.NewScopeHandler(scopeService)
 	dashboardHandler := handlers.NewDashboardHandler(userService, groupService, clientService, db)
-	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService)
-	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService)
+	socialAuthHandler := handlers.NewSocialAuthHandler(socialAuthService, socialProviderService, oauthService, cfg)
+	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
+	setupHandler := handlers.NewSetupHandler(setupService)
 
 	router := mux.NewRouter()
 
+	// Setup endpoints (no middleware, available during initial setup)
+	router.HandleFunc("/api/setup/status", setupHandler.GetSetupStatus).Methods("GET")
+	router.HandleFunc("/api/setup/validate-token", setupHandler.ValidateSetupToken).Methods("POST")
+	router.HandleFunc("/api/setup/complete", setupHandler.PerformSetup).Methods("POST")
+
+	// Apply tenant middleware to all API routes
 	api := router.PathPrefix("/api/v1").Subrouter()
-	
+	api.Use(middleware.TenantMiddleware(tenantService))
+
+	// Tenant management endpoints (super admin only in production)
+	api.HandleFunc("/tenants", tenantHandler.CreateTenant).Methods("POST")
+	api.HandleFunc("/tenants", tenantHandler.GetTenants).Methods("GET")
+	api.HandleFunc("/tenants/{id}", tenantHandler.GetTenant).Methods("GET")
+	api.HandleFunc("/tenants/{id}", tenantHandler.UpdateTenant).Methods("PUT")
+	api.HandleFunc("/tenants/{id}", tenantHandler.DeleteTenant).Methods("DELETE")
+
+	// User management endpoints (tenant-scoped)
 	api.HandleFunc("/users", userHandler.CreateUser).Methods("POST")
 	api.HandleFunc("/users", userHandler.GetUsers).Methods("GET")
 	api.HandleFunc("/users/me", userHandler.GetCurrentUser).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.GetUser).Methods("GET")
 	api.HandleFunc("/users/{id}", userHandler.UpdateUser).Methods("PUT")
 	api.HandleFunc("/users/{id}", userHandler.DeleteUser).Methods("DELETE")
+
+	// Public user registration endpoint (tenant-scoped but no auth required)
+	api.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
 
 	api.HandleFunc("/groups", groupHandler.CreateGroup).Methods("POST")
 	api.HandleFunc("/groups", groupHandler.GetGroups).Methods("GET")
@@ -119,12 +156,87 @@ func main() {
 	api.HandleFunc("/social/providers/{provider}", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
 	api.HandleFunc("/social/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
 
+	// Tenant-specific routes
+	tenantRouter := router.PathPrefix("/tenant/{tenantId}").Subrouter()
+	tenantRouter.Use(middleware.TenantMiddleware(tenantService))
+
+	// OAuth routes for specific tenant
+	tenantOAuth := tenantRouter.PathPrefix("/oauth").Subrouter()
+	tenantOAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"message":   "OAuth2 Authorization Server",
+			"tenant_id": middleware.GetTenantIDFromRequest(r),
+			"endpoints": map[string]string{
+				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
+				"token_endpoint":         r.Host + r.RequestURI + "/token",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}).Methods("GET")
+	tenantOAuth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
+	tenantOAuth.HandleFunc("/token", authHandler.Token).Methods("POST")
+
+	// Social authentication routes for specific tenant
+	tenantAuth := tenantRouter.PathPrefix("/auth").Subrouter()
+	tenantAuth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"message":   "Social Authentication Service",
+			"tenant_id": middleware.GetTenantIDFromRequest(r),
+			"endpoints": map[string]string{
+				"providers_endpoint": r.Host + r.RequestURI + "/providers",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}).Methods("GET")
+	tenantAuth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
+	tenantAuth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
+	tenantAuth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
+	tenantAuth.HandleFunc("/providers/{provider}/test", socialAuthHandler.TestProviderConfig).Methods("POST")
+	tenantAuth.HandleFunc("/{provider}/login", socialAuthHandler.InitiateSocialLogin).Methods("GET")
+	tenantAuth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
+	tenantAuth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
+
+	// Direct login route for specific tenant
+	tenantRouter.HandleFunc("/login", authHandler.Login).Methods("POST")
+
+	// Registration route for specific tenant
+	tenantRouter.HandleFunc("/register", userHandler.RegisterUser).Methods("POST")
+
+	// Legacy routes (backwards compatibility) - these will use default tenant
+	// OAuth routes with tenant middleware
 	oauth := router.PathPrefix("/oauth").Subrouter()
+	oauth.Use(middleware.TenantMiddleware(tenantService))
+	oauth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"message":   "OAuth2 Authorization Server",
+			"tenant_id": middleware.GetTenantIDFromRequest(r),
+			"endpoints": map[string]string{
+				"authorization_endpoint": r.Host + r.RequestURI + "/authorize",
+				"token_endpoint":         r.Host + r.RequestURI + "/token",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}).Methods("GET")
 	oauth.HandleFunc("/authorize", authHandler.Authorize).Methods("GET", "POST")
 	oauth.HandleFunc("/token", authHandler.Token).Methods("POST")
 
-	// Social authentication routes
+	// Social authentication routes with tenant middleware
 	auth := router.PathPrefix("/auth").Subrouter()
+	auth.Use(middleware.TenantMiddleware(tenantService))
+	auth.HandleFunc("", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		response := map[string]interface{}{
+			"message":   "Social Authentication Service",
+			"tenant_id": middleware.GetTenantIDFromRequest(r),
+			"endpoints": map[string]string{
+				"providers_endpoint": r.Host + r.RequestURI + "/providers",
+			},
+		}
+		json.NewEncoder(w).Encode(response)
+	}).Methods("GET")
 	auth.HandleFunc("/providers", socialAuthHandler.GetProviders).Methods("GET")
 	auth.HandleFunc("/providers/config", socialAuthHandler.GetProviderConfigs).Methods("GET")
 	auth.HandleFunc("/providers/{provider}/config", socialAuthHandler.UpdateProviderConfig).Methods("PUT")
@@ -133,7 +245,10 @@ func main() {
 	auth.HandleFunc("/{provider}/callback", socialAuthHandler.HandleSocialCallback).Methods("GET")
 	auth.HandleFunc("/{provider}/oauth", socialAuthHandler.SocialOAuthAuthorize).Methods("GET")
 
-	router.HandleFunc("/login", authHandler.Login).Methods("POST")
+	// Direct login route with tenant middleware
+	loginRouter := router.PathPrefix("/login").Subrouter()
+	loginRouter.Use(middleware.TenantMiddleware(tenantService))
+	loginRouter.HandleFunc("", authHandler.Login).Methods("POST")
 
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -141,5 +256,5 @@ func main() {
 	}).Methods("GET")
 
 	log.Printf("Server starting on port %s", cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, corsMiddleware(router)))
+	log.Fatal(http.ListenAndServe(":"+cfg.Port, middleware.CorsMiddleware(router)))
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/models"
 	"oauth2-openid-server/services"
 
@@ -14,7 +15,9 @@ import (
 )
 
 type UserHandler struct {
-	userService *services.UserService
+	userService   *services.UserService
+	tenantService *services.TenantService
+	groupService  *services.GroupService
 }
 
 type CreateUserRequest struct {
@@ -37,15 +40,32 @@ type UpdateUserRequest struct {
 	Active    bool     `json:"active"`
 }
 
-func NewUserHandler(userService *services.UserService) *UserHandler {
+type RegisterUserRequest struct {
+	Email     string `json:"email"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+func NewUserHandler(userService *services.UserService, tenantService *services.TenantService, groupService *services.GroupService) *UserHandler {
 	return &UserHandler{
-		userService: userService,
+		userService:   userService,
+		tenantService: tenantService,
+		groupService:  groupService,
 	}
 }
 
 func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
 		return
 	}
 
@@ -69,8 +89,8 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user already exists
-	if existingUser, _ := h.userService.GetUserByEmail(createReq.Email); existingUser != nil {
+	// Check if user already exists in this tenant
+	if existingUser, _ := h.userService.GetUserByEmailAndTenant(createReq.Email, tenantID); existingUser != nil {
 		http.Error(w, "User with this email already exists", http.StatusConflict)
 		return
 	}
@@ -81,6 +101,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{
+		TenantID:     tenantID,
 		Email:        createReq.Email,
 		Username:     createReq.Username,
 		PasswordHash: createReq.Password,
@@ -109,7 +130,14 @@ func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := h.userService.GetAllUsers()
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
+	users, err := h.userService.GetAllUsersByTenant(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get users: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -129,10 +157,17 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	user, err := h.userService.GetUserByID(userID)
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -150,6 +185,13 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
@@ -160,6 +202,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &models.User{
+		TenantID:  tenantID,
 		Email:     updateReq.Email,
 		Username:  updateReq.Username,
 		FirstName: updateReq.FirstName,
@@ -169,7 +212,7 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		Scopes:    updateReq.Scopes,
 	}
 
-	if err := h.userService.UpdateUser(userID, user); err != nil {
+	if err := h.userService.UpdateUserInTenant(userID, tenantID, user); err != nil {
 		http.Error(w, "Failed to update user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -186,10 +229,17 @@ func (h *UserHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	vars := mux.Vars(r)
 	userID := vars["id"]
 
-	if err := h.userService.DeleteUser(userID); err != nil {
+	if err := h.userService.DeleteUserInTenant(userID, tenantID); err != nil {
 		http.Error(w, "Failed to delete user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -204,6 +254,13 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	// Extract user ID from JWT token in Authorization header
 	userID, err := h.extractUserIDFromToken(r)
 	if err != nil {
@@ -211,8 +268,8 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get fresh user data from database
-	user, err := h.userService.GetUserByID(userID)
+	// Get fresh user data from database within tenant context
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -221,6 +278,7 @@ func (h *UserHandler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 	// Return fresh user data
 	response := map[string]interface{}{
 		"id":         user.ID.Hex(),
+		"tenant_id":  user.TenantID,
 		"email":      user.Email,
 		"username":   user.Username,
 		"first_name": user.FirstName,
@@ -279,4 +337,96 @@ func (h *UserHandler) extractUserIDFromToken(r *http.Request) (string, error) {
 	}
 
 	return userID, nil
+}
+
+// RegisterUser handles public user registration for tenants that allow it
+func (h *UserHandler) RegisterUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if this tenant allows user registration
+	tenant, err := h.tenantService.GetTenantByID(tenantID)
+	if err != nil {
+		http.Error(w, "Invalid tenant", http.StatusBadRequest)
+		return
+	}
+
+	if !tenant.Settings.AllowUserRegistration {
+		http.Error(w, "User registration is not enabled for this tenant", http.StatusForbidden)
+		return
+	}
+
+	var registerReq RegisterUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&registerReq); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if registerReq.Email == "" {
+		http.Error(w, "Email is required", http.StatusBadRequest)
+		return
+	}
+	if registerReq.Password == "" {
+		http.Error(w, "Password is required", http.StatusBadRequest)
+		return
+	}
+	if len(registerReq.Password) < 8 {
+		http.Error(w, "Password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+
+	// Check if user already exists in this tenant
+	if existingUser, _ := h.userService.GetUserByEmailAndTenant(registerReq.Email, tenantID); existingUser != nil {
+		http.Error(w, "User with this email already exists", http.StatusConflict)
+		return
+	}
+
+	// Find the "Standard Users" group to assign to new registrations
+	var userGroups []string
+	if standardGroup, err := h.groupService.GetGroupByName("Standard Users", tenantID); err == nil {
+		userGroups = []string{standardGroup.ID.Hex()}
+	}
+
+	// Set default scopes for registered users
+	defaultScopes := []string{"read", "openid", "profile", "email", "read:profile", "write:profile"}
+
+	user := &models.User{
+		TenantID:     tenantID,
+		Email:        registerReq.Email,
+		Username:     registerReq.Username,
+		PasswordHash: registerReq.Password,
+		FirstName:    registerReq.FirstName,
+		LastName:     registerReq.LastName,
+		Groups:       userGroups,
+		Scopes:       defaultScopes,
+		Active:       true, // Auto-activate registered users
+	}
+
+	if err := h.userService.CreateUser(user); err != nil {
+		http.Error(w, "Failed to register user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Clear password before returning
+	user.PasswordHash = ""
+
+	response := map[string]interface{}{
+		"message":    "User registered successfully",
+		"user":       user,
+		"login_url":  fmt.Sprintf("/auth/login"),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(response)
 }

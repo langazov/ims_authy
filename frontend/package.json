@@ -4,9 +4,11 @@
     "version": "0.0.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
+    "dev": "vite",
+    "start:debug": "vite --mode development",
         "kill": "fuser -k 5000/tcp",
-        "build": "tsc -b --noCheck && vite build",
+    "build": "tsc -b --noCheck && vite build",
+    "build:debug": "tsc -b --noCheck && vite build --sourcemap --mode development",
         "lint": "eslint .",
         "optimize": "vite optimize",
         "preview": "vite preview"

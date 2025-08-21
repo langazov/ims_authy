@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,8 @@ import { Plus, Search, Edit, Trash2, Users } from 'lucide-react'
 import GroupForm from './GroupForm'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
+import { apiClient } from '@/lib/api'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface Group {
   id: string
@@ -21,6 +23,7 @@ interface Group {
 
 export default function GroupManagement() {
   const { canManageGroups } = usePermissions()
+  const { onTenantChange, activeTenant } = useTenant()
   const [groups, setGroups] = useState<Group[]>([])
   const [activity, setActivity] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -41,26 +44,42 @@ export default function GroupManagement() {
 
   const safeGroups = groups || []
 
-  // Fetch groups from backend
-  useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/api/v1/groups')
-        if (response.ok) {
-          const fetchedGroups = await response.json()
-          setGroups(fetchedGroups)
-        } else {
-          console.error('Failed to fetch groups:', response.statusText)
-        }
-      } catch (error) {
-        console.error('Error fetching groups:', error)
-      } finally {
-        setLoading(false)
-      }
+  // Fetch groups from backend (filtered by activeTenantId)
+  const fetchGroups = useCallback(async () => {
+    // Don't fetch if no active tenant is set
+    if (!activeTenant?.id) {
+      setGroups([])
+      setLoading(false)
+      return
     }
 
+    try {
+      setLoading(true)
+      
+      // Ensure localStorage is updated before making API calls
+      localStorage.setItem('activeTenantId', activeTenant.id)
+      
+      const fetchedGroups = await apiClient.groups.getAll()
+      setGroups(fetchedGroups)
+    } catch (error) {
+      console.error('Error fetching groups:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTenant])
+
+  useEffect(() => {
     fetchGroups()
-  }, [])
+  }, [fetchGroups, activeTenant]) // Add activeTenant dependency to reload when tenant changes
+
+  // Register for tenant change events to reload data (for when component is already mounted)
+  useEffect(() => {
+    const cleanup = onTenantChange(() => {
+      fetchGroups()
+    })
+    
+    return cleanup
+  }, [onTenantChange, fetchGroups])
   
   const filteredGroups = safeGroups.filter(group =>
     group?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -73,28 +92,16 @@ export default function GroupManagement() {
 
   const handleCreateGroup = async (groupData: Omit<Group, 'id' | 'created_at' | 'updated_at'>) => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/groups', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(groupData),
-      })
-
-      if (response.ok) {
-        const newGroup = await response.json()
-        setGroups([...safeGroups, newGroup])
-        setActivity([{
-          id: `activity_${Date.now()}`,
-          type: 'group' as const,
-          action: 'Created group',
-          target: groupData.name,
-          timestamp: new Date().toLocaleString()
-        }, ...activity])
-        setIsDialogOpen(false)
-      } else {
-        console.error('Failed to create group:', response.statusText)
-      }
+      const newGroup = await apiClient.groups.create(groupData)
+      setGroups([...safeGroups, newGroup])
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'group' as const,
+        action: 'Created group',
+        target: groupData.name,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
+      setIsDialogOpen(false)
     } catch (error) {
       console.error('Error creating group:', error)
     }
@@ -104,33 +111,21 @@ export default function GroupManagement() {
     if (!selectedGroup) return
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/groups/${selectedGroup.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(groupData),
-      })
-
-      if (response.ok) {
-        const updatedGroup = await response.json()
-        setGroups(safeGroups.map(group =>
-          group.id === selectedGroup.id ? updatedGroup : group
-        ))
-        
-        setActivity([{
-          id: `activity_${Date.now()}`,
-          type: 'group' as const,
-          action: 'Updated group',
-          target: groupData.name,
-          timestamp: new Date().toLocaleString()
-        }, ...activity])
-        
-        setSelectedGroup(null)
-        setIsDialogOpen(false)
-      } else {
-        console.error('Failed to update group:', response.statusText)
-      }
+      const updatedGroup = await apiClient.groups.update(selectedGroup.id, groupData)
+      setGroups(safeGroups.map(group =>
+        group.id === selectedGroup.id ? updatedGroup : group
+      ))
+      
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'group' as const,
+        action: 'Updated group',
+        target: groupData.name,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
+      
+      setSelectedGroup(null)
+      setIsDialogOpen(false)
     } catch (error) {
       console.error('Error updating group:', error)
     }
@@ -141,22 +136,15 @@ export default function GroupManagement() {
     if (!group) return
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/groups/${groupId}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        setGroups(safeGroups.filter(g => g.id !== groupId))
-        setActivity([{
-          id: `activity_${Date.now()}`,
-          type: 'group' as const,
-          action: 'Deleted group',
-          target: group.name,
-          timestamp: new Date().toLocaleString()
-        }, ...activity])
-      } else {
-        console.error('Failed to delete group:', response.statusText)
-      }
+      await apiClient.groups.delete(groupId)
+      setGroups(safeGroups.filter(g => g.id !== groupId))
+      setActivity([{
+        id: `activity_${Date.now()}`,
+        type: 'group' as const,
+        action: 'Deleted group',
+        target: group.name,
+        timestamp: new Date().toLocaleString()
+      }, ...activity])
     } catch (error) {
       console.error('Error deleting group:', error)
     }

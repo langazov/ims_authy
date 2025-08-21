@@ -104,6 +104,28 @@ class ApiClient {
     update: (id: string, data: any) => this.put<any>(`/api/v1/scopes/${id}`, data),
     delete: (id: string) => this.delete<any>(`/api/v1/scopes/${id}`),
   }
+
+  socialProviders = {
+    getAll: () => this.get<any[]>('/api/v1/social/providers'),
+    getById: (id: string) => this.get<any>(`/api/v1/social/providers/${id}`),
+    update: (id: string, data: any) => this.put<any>(`/api/v1/social/providers/${id}`, data),
+    test: (id: string) => this.post<any>(`/api/v1/social/providers/${id}/test`),
+  }
+
+  twoFactor = {
+    setup: (data: any) => this.post<any>('/api/v1/2fa/setup', data),
+    enable: (data: any) => this.post<any>('/api/v1/2fa/enable', data),
+    disable: (data: any) => this.post<any>('/api/v1/2fa/disable', data),
+    getStatus: (userId: string) => this.get<any>(`/api/v1/2fa/status?user_id=${userId}`),
+  }
+
+  tenants = {
+    getAll: () => this.get<any[]>('/api/v1/tenants'),
+    getById: (id: string) => this.get<any>(`/api/v1/tenants/${id}`),
+    create: (data: any) => this.post<any>('/api/v1/tenants', data),
+    update: (id: string, data: any) => this.put<any>(`/api/v1/tenants/${id}`, data),
+    delete: (id: string) => this.delete<any>(`/api/v1/tenants/${id}`),
+  }
 }
 
 export const apiClient = new ApiClient()

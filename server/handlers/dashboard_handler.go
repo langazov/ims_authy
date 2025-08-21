@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"oauth2-openid-server/database"
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -81,19 +82,21 @@ func (h *DashboardHandler) GetDashboardStats(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	groups, err := h.groupService.GetAllGroups()
+	tenantID := middleware.GetTenantIDFromRequest(r)
+
+	groups, err := h.groupService.GetAllGroups(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get groups", http.StatusInternalServerError)
 		return
 	}
 
-	clients, err := h.clientService.GetAllClients()
+	clients, err := h.clientService.GetAllClients(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get clients", http.StatusInternalServerError)
 		return
 	}
 
-	activeClients, err := h.clientService.GetActiveClients()
+	activeClients, err := h.clientService.GetActiveClients(tenantID)
 	if err != nil {
 		http.Error(w, "Failed to get active clients", http.StatusInternalServerError)
 		return
@@ -133,7 +136,7 @@ func (h *DashboardHandler) GetDashboardStats(w http.ResponseWriter, r *http.Requ
 		stats.TokenUsage = tokenUsage
 	}
 
-	clientUsage, err := h.getClientUsage()
+	clientUsage, err := h.getClientUsage(tenantID)
 	if err == nil {
 		stats.ClientUsage = clientUsage
 	}
@@ -331,7 +334,7 @@ func (h *DashboardHandler) getTokenUsage() ([]TokenUsageStats, error) {
 	return stats, nil
 }
 
-func (h *DashboardHandler) getClientUsage() ([]ClientUsageStats, error) {
+func (h *DashboardHandler) getClientUsage(tenantID string) ([]ClientUsageStats, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -372,7 +375,7 @@ func (h *DashboardHandler) getClientUsage() ([]ClientUsageStats, error) {
 			Count    int64  `bson:"count"`
 		}
 		if cursor.Decode(&result) == nil {
-			client, err := h.clientService.GetClientByClientID(result.ClientID)
+			client, err := h.clientService.GetClientByClientID(result.ClientID, tenantID)
 			clientName := result.ClientID
 			if err == nil && client != nil {
 				clientName = client.Name

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"oauth2-openid-server/middleware"
 	"oauth2-openid-server/services"
 )
 
@@ -18,9 +19,15 @@ type AuthHandler struct {
 }
 
 type LoginRequest struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	TwoFACode string `json:"two_fa_code,omitempty"`
+	Email                 string `json:"email"`
+	Password              string `json:"password"`
+	TwoFACode             string `json:"two_fa_code,omitempty"`
+	// OAuth PKCE parameters for secure authentication
+	ClientID              string `json:"client_id,omitempty"`
+	RedirectURI           string `json:"redirect_uri,omitempty"`
+	CodeChallenge         string `json:"code_challenge,omitempty"`
+	CodeChallengeMethod   string `json:"code_challenge_method,omitempty"`
+	State                 string `json:"state,omitempty"`
 }
 
 type AuthorizeRequest struct {
@@ -46,13 +53,20 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	var loginReq LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginReq); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	user, err := h.userService.GetUserByEmail(loginReq.Email)
+	user, err := h.userService.GetUserByEmailAndTenant(loginReq.Email, tenantID)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -96,8 +110,45 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate OAuth tokens for successful login
-	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), user.Scopes)
+	// Check if PKCE parameters are provided for secure OAuth flow
+	if loginReq.ClientID != "" && loginReq.RedirectURI != "" && loginReq.CodeChallenge != "" {
+		// Use PKCE OAuth flow - generate authorization code
+		scopes := []string{"read", "openid", "profile", "email"}
+		if len(user.Scopes) > 0 {
+			scopes = user.Scopes // Use user's actual scopes
+		}
+
+		authCode, err := h.oauthService.CreateAuthorizationCode(
+			loginReq.ClientID,
+			user.ID.Hex(),
+			tenantID,
+			loginReq.RedirectURI,
+			scopes,
+			loginReq.CodeChallenge,
+			loginReq.CodeChallengeMethod,
+		)
+		if err != nil {
+			http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"user_id": user.ID.Hex(),
+			"email":   user.Email,
+			"scopes":  user.Scopes,
+			"groups":  user.Groups,
+			"two_factor_verified": twoFactorRequired,
+			"code":    authCode,  // Return authorization code for PKCE flow
+			"state":   loginReq.State,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Fallback: Generate OAuth tokens for backward compatibility
+	tokens, err := h.oauthService.GenerateDirectLoginTokens(user.ID.Hex(), tenantID, user.Scopes)
 	if err != nil {
 		http.Error(w, "Failed to generate authentication tokens", http.StatusInternalServerError)
 		return
@@ -127,6 +178,13 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get tenant ID from request context
+	tenantID := middleware.GetTenantIDFromRequest(r)
+	if tenantID == "" {
+		http.Error(w, "Tenant context required", http.StatusBadRequest)
+		return
+	}
+
 	clientID := r.FormValue("client_id")
 	redirectURI := r.FormValue("redirect_uri")
 	responseType := r.FormValue("response_type")
@@ -143,8 +201,8 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	requestedScopes := strings.Fields(scope)
 
-	// Get user's actual permissions from database
-	user, err := h.userService.GetUserByID(userID)
+	// Get user's actual permissions from database within tenant context
+	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
 		return
@@ -166,7 +224,7 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		grantedScopes = []string{"read"}
 	}
 
-	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, redirectURI, grantedScopes, codeChallenge, codeChallengeMethod)
+	code, err := h.oauthService.CreateAuthorizationCode(clientID, userID, tenantID, redirectURI, grantedScopes, codeChallenge, codeChallengeMethod)
 	if err != nil {
 		http.Error(w, "Failed to create authorization code", http.StatusInternalServerError)
 		return
@@ -197,7 +255,8 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
 	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
 
 	// Get enabled social providers
-	enabledProviders := h.socialAuthService.GetEnabledProviders()
+	tenantID := "" // Default tenant for auth handler
+	enabledProviders := h.socialAuthService.GetEnabledProviders(tenantID)
 	socialButtons := ""
 	
 	for _, provider := range enabledProviders {
@@ -377,8 +436,12 @@ func (h *AuthHandler) Token(w http.ResponseWriter, r *http.Request) {
 	// Support both PKCE (code_verifier) and traditional (client_secret) flows
 	if codeVerifier != "" {
 		tokenResponse, err = h.oauthService.ExchangeCodeForTokensPKCE(code, clientID, codeVerifier, redirectURI)
-	} else {
+	} else if clientSecret != "" {
 		tokenResponse, err = h.oauthService.ExchangeCodeForTokens(code, clientID, clientSecret, redirectURI)
+	} else {
+		// Handle direct social login without client_secret or code_verifier
+		// This is for authorization codes created by the social auth handler
+		tokenResponse, err = h.oauthService.ExchangeCodeForTokensDirectSocialLogin(code, clientID, redirectURI)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { apiClient } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface User {
   id: string
@@ -51,21 +52,23 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
     active: user?.active ?? true,
-    groups: user?.groups || [],
-    scopes: user?.scopes || ['read', 'openid', 'profile', 'email']
+    groups: Array.isArray(user?.groups) ? user.groups : [],
+    scopes: Array.isArray(user?.scopes) ? user.scopes : ['read', 'openid', 'profile', 'email'],
+    password: ''
   })
 
   // Update form data when user prop changes
   useEffect(() => {
     if (user) {
       setFormData({
-        email: user.email,
-        username: user.username,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        active: user.active,
-        groups: user.groups || [],
-        scopes: user.scopes || []
+        email: user.email || '',
+        username: user.username || '',
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        active: user.active ?? true,
+        groups: Array.isArray(user.groups) ? user.groups : [],
+        scopes: Array.isArray(user.scopes) ? user.scopes : [],
+        password: ''
       })
     } else {
       // Reset to defaults for new user
@@ -76,10 +79,40 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
         last_name: '',
         active: true,
         groups: [],
-        scopes: ['read', 'openid', 'profile', 'email']
+        scopes: ['read', 'openid', 'profile', 'email'],
+        password: ''
       })
     }
   }, [user])
+
+  const generatePassword = (length = 16) => {
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}<>?'
+    try {
+      const array = new Uint32Array(length)
+      window.crypto.getRandomValues(array)
+      return Array.from(array).map(n => charset[n % charset.length]).join('')
+    } catch (e) {
+      // fallback
+      let out = ''
+      for (let i = 0; i < length; i++) {
+        out += charset[Math.floor(Math.random() * charset.length)]
+      }
+      return out
+    }
+  }
+  const copyPassword = async () => {
+    try {
+      if (!formData.password) {
+        toast.error('No password to copy')
+        return
+      }
+      await navigator.clipboard.writeText(formData.password)
+      toast.success('Password copied to clipboard')
+    } catch (err) {
+      console.error('Failed to copy password:', err)
+      toast.error('Failed to copy password')
+    }
+  }
 
   // Fetch available scopes from API
   useEffect(() => {
@@ -100,59 +133,91 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
   const getAvailableScopes = (selectedGroups: string[]) => {
     const availableScopes = new Set<string>()
     
-    selectedGroups.forEach(groupName => {
-      const group = safeGroups.find(g => g.name === groupName)
-      if (group && group.scopes) {
-        group.scopes.forEach(scope => availableScopes.add(scope))
-      }
-    })
+    if (Array.isArray(selectedGroups)) {
+      selectedGroups.forEach(groupName => {
+        const group = safeGroups.find(g => g.name === groupName)
+        if (group && Array.isArray(group.scopes)) {
+          group.scopes.forEach(scope => availableScopes.add(scope))
+        }
+      })
+    }
     
     return Array.from(availableScopes)
   }
 
-  // Get available scopes for current selected groups
-  const filteredAvailableScopes = getAvailableScopes(formData.groups)
+  // Get available scopes for current selected groups (memoized to prevent unnecessary re-renders)
+  const filteredAvailableScopes = useMemo(() => 
+    getAvailableScopes(formData.groups), 
+    [formData.groups, safeGroups]
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSubmit(formData)
+    // Exclude password when updating existing user (backend may ignore it)
+    if (user) {
+      const { password, ...rest } = formData as any
+      onSubmit(rest)
+    } else {
+      onSubmit(formData as any)
+    }
   }
 
   const handleGroupChange = (groupName: string, checked: boolean) => {
-    if (checked) {
-      setFormData(prev => ({
-        ...prev,
-        groups: [...prev.groups, groupName]
-      }))
-    } else {
-      setFormData(prev => {
-        const newGroups = prev.groups.filter(name => name !== groupName)
+    setFormData(prev => {
+      const currentGroups = Array.isArray(prev.groups) ? prev.groups : []
+      
+      if (checked) {
+        // Add group if not already present
+        const newGroups = currentGroups.includes(groupName) 
+          ? currentGroups 
+          : [...currentGroups, groupName]
+        
+        return {
+          ...prev,
+          groups: newGroups
+        }
+      } else {
+        // Remove group and filter scopes
+        const newGroups = currentGroups.filter(name => name !== groupName)
         // Calculate available scopes from remaining groups
         const newAvailableScopes = getAvailableScopes(newGroups)
         // Remove scopes that are no longer available
-        const filteredScopes = prev.scopes.filter(scope => newAvailableScopes.includes(scope))
+        const currentScopes = Array.isArray(prev.scopes) ? prev.scopes : []
+        const filteredScopes = currentScopes.filter(scope => newAvailableScopes.includes(scope))
         
         return {
           ...prev,
           groups: newGroups,
           scopes: filteredScopes
         }
-      })
-    }
+      }
+    })
   }
 
   const handleScopeChange = (scopeId: string, checked: boolean) => {
-    if (checked) {
-      setFormData(prev => ({
-        ...prev,
-        scopes: [...prev.scopes, scopeId]
-      }))
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        scopes: prev.scopes.filter(id => id !== scopeId)
-      }))
-    }
+    setFormData(prev => {
+      const currentScopes = Array.isArray(prev.scopes) ? prev.scopes : []
+      
+      if (checked) {
+        // Add scope if not already present
+        const newScopes = currentScopes.includes(scopeId) 
+          ? currentScopes 
+          : [...currentScopes, scopeId]
+        
+        return {
+          ...prev,
+          scopes: newScopes
+        }
+      } else {
+        // Remove scope
+        const newScopes = currentScopes.filter(id => id !== scopeId)
+        
+        return {
+          ...prev,
+          scopes: newScopes
+        }
+      }
+    })
   }
 
   return (
@@ -179,7 +244,7 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="username">Username</Label>
+  <Label htmlFor="username">Username</Label>
         <Input
           id="username"
           value={formData.username}
@@ -197,6 +262,26 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
           onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
           required
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <div className="flex space-x-2">
+          <Input
+            id="password"
+            type="text"
+            value={formData.password}
+            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+            placeholder="Auto-generate a strong password or type your own"
+          />
+          <Button type="button" variant="secondary" onClick={() => setFormData(prev => ({ ...prev, password: generatePassword() }))}>
+            Generate
+          </Button>
+          <Button type="button" variant="outline" onClick={copyPassword}>
+            Copy
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">Leave empty to auto-generate a password on creation.</p>
       </div>
 
       <div className="space-y-2">
@@ -220,7 +305,7 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
               <div key={group.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={`group-${group.id}`}
-                  checked={formData.groups.includes(group.name)}
+                  checked={Array.isArray(formData.groups) && formData.groups.includes(group.name)}
                   onCheckedChange={(checked) => handleGroupChange(group.name, checked as boolean)}
                 />
                 <Label htmlFor={`group-${group.id}`} className="text-sm">
@@ -236,7 +321,7 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
         <div className="flex items-center justify-between">
           <Label>Permissions & Scopes</Label>
           <span className="text-xs text-muted-foreground">
-            {formData.scopes.length} of {filteredAvailableScopes.length} scope{filteredAvailableScopes.length !== 1 ? 's' : ''} selected
+            {Array.isArray(formData.scopes) ? formData.scopes.length : 0} of {filteredAvailableScopes.length} scope{filteredAvailableScopes.length !== 1 ? 's' : ''} selected
           </span>
         </div>
         
@@ -253,7 +338,7 @@ export default function UserForm({ user, groups, onSubmit, onCancel }: UserFormP
               <div key={scope.id} className="flex items-start space-x-2">
                 <Checkbox
                   id={`scope-${scope.id}`}
-                  checked={formData.scopes.includes(scope.name)}
+                  checked={Array.isArray(formData.scopes) && formData.scopes.includes(scope.name)}
                   onCheckedChange={(checked) => handleScopeChange(scope.name, checked as boolean)}
                   className="mt-1"
                 />

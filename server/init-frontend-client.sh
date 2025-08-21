@@ -3,7 +3,7 @@
 echo "Creating frontend OAuth2 client..."
 
 # Create the frontend client via API
-curl -X POST http://localhost:8080/api/v1/clients \
+curl -X POST https://oauth2.imsc.eu/api/v1/clients \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Frontend Management UI",

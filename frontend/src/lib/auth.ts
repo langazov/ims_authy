@@ -1,10 +1,12 @@
 import { config } from './config'
+import { TenantUrlBuilder } from './tenantUrls'
 
 export interface User {
   id: string
   email: string
   scopes: string[]
   groups: string[]
+  tenant_id?: string
   two_factor_verified?: boolean
 }
 
@@ -20,6 +22,8 @@ export interface AuthTokens {
 class AuthService {
   private readonly STORAGE_KEY = 'auth_tokens'
   private readonly CODE_VERIFIER_KEY = 'code_verifier'
+
+  // Note: getActiveTenantId method removed - no longer using activeTenantId in login flows
 
   generateCodeVerifier(): string {
     const array = new Uint8Array(32)
@@ -60,10 +64,14 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    window.location.href = `${config.oauth.authUrl}?${params.toString()}`
+    // Use tenant-specific URL if a tenant is selected
+    // Always use legacy OAuth URL (no tenant-specific routing)
+    const authUrl = TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
+
+    window.location.href = authUrl
   }
 
-  async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple'): Promise<void> {
+  async startSocialLogin(provider: 'google' | 'github' | 'facebook' | 'apple', tenantId?: string): Promise<void> {
     const codeVerifier = this.generateCodeVerifier()
     const codeChallenge = await this.generateCodeChallenge(codeVerifier)
     const state = crypto.randomUUID()
@@ -71,7 +79,7 @@ class AuthService {
     localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
     localStorage.setItem('oauth_state', state)
 
-    console.info('[auth] startSocialLogin', { provider, clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, state })
+    console.info('[auth] startSocialLogin', { provider, tenantId, clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, state })
 
     const params = new URLSearchParams({
       client_id: config.oauth.clientId,
@@ -81,14 +89,30 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    window.location.href = `${config.apiBaseUrl}/auth/${provider}/oauth?${params.toString()}`
+    // Use tenant-specific URL if a tenant is provided, otherwise use legacy URL
+    const socialUrl = tenantId 
+      ? TenantUrlBuilder.buildSocialLoginUrl(tenantId, provider, params)
+      : TenantUrlBuilder.buildLegacySocialLoginUrl(provider, params)
+
+    console.info('[auth] redirecting to social provider', { socialUrl })
+    window.location.href = socialUrl
   }
 
   async handleCallback(code: string, state: string): Promise<User> {
-    // Check if we're already authenticated (prevents duplicate processing)
-    if (this.isAuthenticated()) {
+    // For direct social login, always process the callback even if we have existing tokens
+    // This ensures we get fresh tokens from the social login flow
+    if (state !== 'direct-social-login' && this.isAuthenticated()) {
       console.info('[auth] handleCallback - already authenticated, returning current user')
       return this.getCurrentUser()
+    }
+    
+    // Clear any existing tokens for direct social login to prevent conflicts
+    if (state === 'direct-social-login') {
+      console.info('[auth] handleCallback - processing direct social login, clearing existing tokens')
+      localStorage.removeItem(this.STORAGE_KEY)
+      localStorage.removeItem(this.CODE_VERIFIER_KEY)
+      localStorage.removeItem('oauth_state')
+      // No longer using direct_login_user - all authentication via OAuth tokens
     }
 
     const storedState = localStorage.getItem('oauth_state')
@@ -104,12 +128,17 @@ class AuthService {
       }
     }
 
-    if (state !== storedState) {
+    // For direct social login, the state will be 'direct-social-login'
+    if (state === 'direct-social-login') {
+      console.info('[auth] handleCallback - direct social login detected')
+      // Skip state validation for direct social login
+    } else if (state !== storedState) {
       console.warn('[auth] handleCallback - invalid state', { received: state, stored: storedState })
       throw new Error('Invalid state parameter')
     }
 
-    if (!codeVerifier) {
+    // Code verifier is not required for direct social login
+    if (!codeVerifier && state !== 'direct-social-login') {
       console.warn('[auth] handleCallback - code verifier not found')
       throw new Error('Code verifier not found')
     }
@@ -119,12 +148,25 @@ class AuthService {
     tokenData.append('code', code)
     tokenData.append('redirect_uri', config.oauth.redirectUri)
     tokenData.append('client_id', config.oauth.clientId)
-    tokenData.append('code_verifier', codeVerifier)
+    
+    // Only add code verifier if it exists (not needed for direct social login)
+    if (codeVerifier) {
+      tokenData.append('code_verifier', codeVerifier)
+    }
 
-    console.debug('[auth] exchanging code for tokens', { tokenUrl: config.oauth.tokenUrl })
-    const response = await fetch(config.oauth.tokenUrl, {
+    // Use tenant-specific URL if a tenant is selected
+    // Always use legacy token URL (no tenant-specific routing)
+    const tokenUrl = TenantUrlBuilder.buildLegacyOAuthTokenUrl()
+
+    console.debug('[auth] exchanging code for tokens', { tokenUrl })
+    const response = await fetch(tokenUrl, {
       method: 'POST',
-      body: tokenData
+      headers: {
+        'Accept': 'application/json',
+      },
+      body: tokenData,
+      credentials: 'include',
+      mode: 'cors'
     })
 
     if (!response.ok) {
@@ -151,17 +193,12 @@ class AuthService {
         id: payload.sub,
         email: payload.email,
         scopes: payload.scopes || [],
-        groups: payload.groups || []
+        groups: payload.groups || [],
+        tenant_id: payload.tenant_id
       }
     }
 
-    // Fallback to direct login user data
-    const directUser = localStorage.getItem('direct_login_user')
-    if (directUser) {
-      return JSON.parse(directUser)
-    }
-
-    throw new Error('No authentication data available')
+    throw new Error('No authentication data available - OAuth tokens required')
   }
 
   async refreshCurrentUser(): Promise<User> {
@@ -177,7 +214,8 @@ class AuthService {
         id: userData.id,
         email: userData.email,
         scopes: userData.scopes || [],
-        groups: userData.groups || []
+        groups: userData.groups || [],
+        tenant_id: userData.tenant_id
       }
       
       return refreshedUser
@@ -226,14 +264,25 @@ class AuthService {
       return true
     }
 
-    // Fallback to direct login user
-    const directUser = localStorage.getItem('direct_login_user')
-    return !!directUser
+    // Only use OAuth tokens for authentication - no fallback to direct_login_user
+    return false
   }
 
   async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
     try {
-      const response = await fetch(`${config.apiBaseUrl}/login`, {
+      // Use PKCE OAuth flow for secure authentication
+      const codeVerifier = this.generateCodeVerifier()
+      const codeChallenge = await this.generateCodeChallenge(codeVerifier)
+      const state = crypto.randomUUID()
+
+      // Store PKCE parameters for callback processing
+      localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
+      localStorage.setItem('oauth_state', state)
+
+      // Step 1: Authenticate with credentials and get authorization code
+      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -242,6 +291,12 @@ class AuthService {
           email,
           password,
           two_fa_code: twoFACode,
+          // Include OAuth parameters for PKCE flow
+          client_id: config.oauth.clientId,
+          redirect_uri: config.oauth.redirectUri,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256',
+          state: state,
         }),
       })
 
@@ -256,22 +311,35 @@ class AuthService {
         return { success: false, twoFactorRequired: true }
       }
 
-      // Store OAuth tokens if they were provided
-      if (data.tokens) {
-        this.storeTokens(data.tokens)
-        // Remove any existing direct login user data
-        localStorage.removeItem('direct_login_user')
+      // If backend returns an authorization code, exchange it for tokens
+      if (data.code) {
+        console.info('[auth] directLogin - received authorization code, exchanging for tokens')
+        try {
+          const user = await this.handleCallback(data.code, state)
+          return { success: true, user }
+        } catch (error) {
+          console.error('[auth] directLogin - token exchange failed:', error)
+          return { success: false, error: 'Token exchange failed' }
+        }
       }
 
-      const user: User = {
-        id: data.user_id,
-        email: data.email,
-        scopes: data.scopes || [],
-        groups: data.groups || [],
-        two_factor_verified: data.two_factor_verified || false,
+      // Fallback: if backend returns tokens directly (backward compatibility)
+      if (data.tokens) {
+        console.info('[auth] directLogin - received tokens directly')
+        this.storeTokens(data.tokens)
+        
+        const user: User = {
+          id: data.user_id,
+          email: data.email,
+          scopes: data.scopes || [],
+          groups: data.groups || [],
+          two_factor_verified: data.two_factor_verified || false,
+        }
+        
+        return { success: true, user }
       }
-      
-      return { success: true, user }
+
+      return { success: false, error: 'Invalid response from server' }
     } catch (error) {
       console.error('[auth] directLogin failed:', error)
       return { success: false, error: 'Login failed' }
@@ -279,11 +347,11 @@ class AuthService {
   }
 
   logout(): void {
-  console.info('[auth] logout')
-  localStorage.removeItem(this.STORAGE_KEY)
-  localStorage.removeItem(this.CODE_VERIFIER_KEY)
-  localStorage.removeItem('oauth_state')
-  localStorage.removeItem('direct_login_user')
+    console.info('[auth] logout')
+    localStorage.removeItem(this.STORAGE_KEY)
+    localStorage.removeItem(this.CODE_VERIFIER_KEY)
+    localStorage.removeItem('oauth_state')
+    // No longer using direct_login_user - all authentication via OAuth tokens
   }
 
   async makeAuthenticatedRequest(url: string, options: RequestInit = {}): Promise<Response> {
@@ -293,10 +361,25 @@ class AuthService {
       throw new Error('No authentication tokens available')
     }
 
-    const headers = {
-      ...options.headers,
+    const headers: Record<string, string> = {
       'Authorization': `Bearer ${tokens.access_token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> || {})
+    }
+
+    // Prioritize activeTenantId for admin operations, fallback to JWT token tenant_id
+    const activeTenantId = localStorage.getItem('activeTenantId')
+    if (activeTenantId) {
+      headers['X-Tenant-ID'] = activeTenantId
+    } else if (tokens.id_token) {
+      try {
+        const payload = this.parseJwtPayload(tokens.id_token)
+        if (payload.tenant_id) {
+          headers['X-Tenant-ID'] = payload.tenant_id
+        }
+      } catch (error) {
+        console.warn('[auth] Failed to parse ID token for tenant ID:', error)
+      }
     }
 
     console.debug('[auth] makeAuthenticatedRequest', { url, method: options.method || 'GET' })

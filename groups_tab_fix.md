@@ -27,7 +27,7 @@ The Groups tab was not showing available groups from the backend database.
 useEffect(() => {
   const fetchGroups = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/v1/groups')
+      const response = await fetch('https://oauth2.imsc.eu/api/v1/groups')
       if (response.ok) {
         const fetchedGroups = await response.json()
         setGroups(fetchedGroups)
@@ -92,7 +92,7 @@ Created {new Date(group.created_at).toLocaleDateString()}
 
 ### **Backend API Test:**
 ```bash
-curl http://localhost:8080/api/v1/groups
+curl https://oauth2.imsc.eu/api/v1/groups
 ```
 
 **Response (2 existing groups):**
@@ -142,6 +142,6 @@ curl http://localhost:8080/api/v1/groups
 
 ## 🔗 **Access:**
 - **Frontend**: http://localhost:5173/ → Sign in → "Groups" tab
-- **Backend API**: http://localhost:8080/api/v1/groups
+- **Backend API**: https://oauth2.imsc.eu/api/v1/groups
 
 The Groups tab is now fully functional and correctly displays the available groups from the database!

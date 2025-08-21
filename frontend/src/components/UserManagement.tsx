@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import UserForm from './UserForm'
 import { apiClient } from '@/lib/api'
 import AccessDenied from './AccessDenied'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface User {
   id: string
@@ -27,6 +28,7 @@ interface User {
 
 export default function UserManagement() {
   const { canManageUsers } = usePermissions()
+  const { onTenantChange, activeTenant } = useTenant()
   const [users, setUsers] = useState<User[]>([])
   const [groups, setGroups] = useState<any[]>([])
   const [activity, setActivity] = useState<any[]>([])
@@ -46,26 +48,48 @@ export default function UserManagement() {
     )
   }
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [usersData, groupsData] = await Promise.all([
-          apiClient.users.getAll(),
-          apiClient.groups.getAll()
-        ])
-        setUsers(Array.isArray(usersData) ? usersData : [])
-        setGroups(Array.isArray(groupsData) ? groupsData : [])
-      } catch (error) {
-        console.error('Failed to fetch users:', error)
-        setUsers([])
-        setGroups([])
-      } finally {
-        setLoading(false)
-      }
+  const fetchData = useCallback(async () => {
+    // Don't fetch if no active tenant is set
+    if (!activeTenant?.id) {
+      setUsers([])
+      setGroups([])
+      setLoading(false)
+      return
     }
 
+    try {
+      setLoading(true)
+      
+      // Ensure localStorage is updated before making API calls
+      localStorage.setItem('activeTenantId', activeTenant.id)
+      
+      const [usersData, groupsData] = await Promise.all([
+        apiClient.users.getAll(),
+        apiClient.groups.getAll()
+      ])
+      setUsers(Array.isArray(usersData) ? usersData : [])
+      setGroups(Array.isArray(groupsData) ? groupsData : [])
+    } catch (error) {
+      console.error('Failed to fetch users:', error)
+      setUsers([])
+      setGroups([])
+    } finally {
+      setLoading(false)
+    }
+  }, [activeTenant])
+
+  useEffect(() => {
     fetchData()
-  }, [])
+  }, [fetchData, activeTenant]) // Add activeTenant dependency to reload when tenant changes
+
+  // Register for tenant change events to reload data (for when component is already mounted)
+  useEffect(() => {
+    const cleanup = onTenantChange(() => {
+      fetchData()
+    })
+    
+    return cleanup
+  }, [onTenantChange, fetchData])
 
   const safeUsers = users || []
   const filteredUsers = safeUsers.filter(user =>
@@ -254,12 +278,12 @@ export default function UserManagement() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {user.groups?.length > 0 ? (
+                      {Array.isArray(user.groups) && user.groups.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
-                          {(user.groups || []).map((groupName) => {
+                          {user.groups.map((groupName, index) => {
                             const group = groups.find((g: any) => g.name === groupName)
                             return (
-                              <Badge key={groupName} variant="outline" className="text-xs">
+                              <Badge key={`${user.id}-${groupName}-${index}`} variant="outline" className="text-xs">
                                 {group?.name || groupName}
                               </Badge>
                             )

@@ -13,6 +13,8 @@
 /frontend/npm-debug.log*
 /frontend/.vscode/
 
+node_modules
+
 # .gitignore for Go (server)
 /server/bin/
 /server/build/
