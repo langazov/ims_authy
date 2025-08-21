@@ -35,13 +35,13 @@ export function LoginUrlsBox() {
 
   const handleTestLogin = (loginUrl: LoginUrl) => {
     if (loginUrl.type === 'oauth') {
-      // Use proper OAuth flow with AuthService
-      login()
+      // Use proper OAuth flow with AuthService, passing tenant ID
+      login(activeTenant?.id)
     } else if (loginUrl.type === 'social' && loginUrl.provider) {
       // Use proper social login flow with AuthService
       loginWithSocial(loginUrl.provider as 'google' | 'github' | 'facebook' | 'apple', activeTenant?.id)
     } else {
-      // For direct login, just open the URL since it's a different flow
+      // For direct login, just open the URL since it requires user input
       window.open(loginUrl.url, '_blank')
     }
   }
@@ -311,13 +311,20 @@ export function LoginUrlsBox() {
           </div>
         ))}
         
-        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-xs text-yellow-800">
-            <strong>⚠️ Important:</strong> These URLs contain pre-generated PKCE parameters and are for reference only. 
-            In production, each OAuth flow must generate fresh <code>code_challenge</code>, <code>state</code>, and 
-            <code>code_verifier</code> parameters. Do not use these URLs directly for authentication - they will fail 
-            because the code verifier is not stored in your session.
-          </p>
+        <div className="mt-4 space-y-2">
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs text-green-800">
+              <strong>✅ Test Buttons:</strong> Use the "Test" buttons for proper authentication flows. 
+              These buttons use the correct auth service methods with fresh PKCE parameters and tenant context.
+            </p>
+          </div>
+          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-800">
+              <strong>⚠️ URL Reference:</strong> The displayed URLs contain pre-generated PKCE parameters and are for 
+              integration reference only. Direct use of these URLs will fail because the code verifier is not stored 
+              in your session. Use the Test buttons for actual authentication testing.
+            </p>
+          </div>
         </div>
       </CardContent>
     </Card>

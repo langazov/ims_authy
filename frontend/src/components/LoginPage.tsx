@@ -19,8 +19,8 @@ export default function LoginPage() {
   }
 
   const handleOAuthLogin = () => {
-    // No longer storing activeTenantId - using default tenant fallback
-    login()
+    // Pass selected tenant ID to login method
+    login(selectedTenant?.id)
   }
 
   const enabledProviders = (Object.entries(config.social) as [keyof typeof config.social, typeof config.social[keyof typeof config.social]][])

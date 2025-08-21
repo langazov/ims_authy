@@ -5,8 +5,8 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: () => void
-  directLogin: (email: string, password: string, twoFACode?: string) => Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }>
+  login: (tenantId?: string) => void
+  directLogin: (email: string, password: string, twoFACode?: string, tenantId?: string) => Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }>
   loginWithSocial: (provider: 'google' | 'github' | 'facebook' | 'apple', tenantId?: string) => void
   logout: () => void
   handleCallback: (code: string, state: string) => Promise<void>
@@ -45,14 +45,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth()
   }, [])
 
-  const login = () => {
-    console.info('[AuthContext] login requested')
-    authService.startLogin()
+  const login = (tenantId?: string) => {
+    console.info('[AuthContext] login requested', { tenantId })
+    authService.startLogin(tenantId)
   }
 
-  const directLogin = async (email: string, password: string, twoFACode?: string) => {
-    console.info('[AuthContext] direct login requested', { email })
-    const result = await authService.directLogin(email, password, twoFACode)
+  const directLogin = async (email: string, password: string, twoFACode?: string, tenantId?: string) => {
+    console.info('[AuthContext] direct login requested', { email, tenantId })
+    const result = await authService.directLogin(email, password, twoFACode, tenantId)
     if (result.success && result.user) {
       setUser(result.user)
     }

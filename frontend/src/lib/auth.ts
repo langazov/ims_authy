@@ -44,7 +44,7 @@ class AuthService {
       .replace(/\//g, '_')
   }
 
-  async startLogin(): Promise<void> {
+  async startLogin(tenantId?: string): Promise<void> {
     const codeVerifier = this.generateCodeVerifier()
     const codeChallenge = await this.generateCodeChallenge(codeVerifier)
     const state = crypto.randomUUID()
@@ -52,7 +52,16 @@ class AuthService {
     localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
     localStorage.setItem('oauth_state', state)
 
-    console.info('[auth] startLogin', { clientId: config.oauth.clientId, redirectUri: config.oauth.redirectUri, scope: config.oauth.scope, state })
+    // Use provided tenantId or get from localStorage
+    const activeTenantId = tenantId || localStorage.getItem('activeTenantId')
+
+    console.info('[auth] startLogin', { 
+      clientId: config.oauth.clientId, 
+      redirectUri: config.oauth.redirectUri, 
+      scope: config.oauth.scope, 
+      state, 
+      tenantId: activeTenantId 
+    })
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -64,10 +73,12 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
-    // Use tenant-specific URL if a tenant is selected
-    // Always use legacy OAuth URL (no tenant-specific routing)
-    const authUrl = TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
+    // Use tenant-specific URL if a tenant is selected, otherwise use legacy URL
+    const authUrl = activeTenantId 
+      ? TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
+      : TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
 
+    console.info('[auth] redirecting to OAuth provider', { authUrl, tenantId: activeTenantId })
     window.location.href = authUrl
   }
 
@@ -155,8 +166,10 @@ class AuthService {
     }
 
     // Use tenant-specific URL if a tenant is selected
-    // Always use legacy token URL (no tenant-specific routing)
-    const tokenUrl = TenantUrlBuilder.buildLegacyOAuthTokenUrl()
+    const activeTenantId = localStorage.getItem('activeTenantId')
+    const tokenUrl = activeTenantId 
+      ? TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
+      : TenantUrlBuilder.buildLegacyOAuthTokenUrl()
 
     console.debug('[auth] exchanging code for tokens', { tokenUrl })
     const response = await fetch(tokenUrl, {
@@ -268,7 +281,7 @@ class AuthService {
     return false
   }
 
-  async directLogin(email: string, password: string, twoFACode?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
+  async directLogin(email: string, password: string, twoFACode?: string, tenantId?: string): Promise<{ success: boolean; user?: User; twoFactorRequired?: boolean; error?: string }> {
     try {
       // Use PKCE OAuth flow for secure authentication
       const codeVerifier = this.generateCodeVerifier()
@@ -279,8 +292,15 @@ class AuthService {
       localStorage.setItem(this.CODE_VERIFIER_KEY, codeVerifier)
       localStorage.setItem('oauth_state', state)
 
+      // Use provided tenantId or get from localStorage
+      const activeTenantId = tenantId || localStorage.getItem('activeTenantId')
+
       // Step 1: Authenticate with credentials and get authorization code
-      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      const loginUrl = activeTenantId 
+        ? TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
+        : TenantUrlBuilder.buildLegacyDirectLoginUrl()
+      
+      console.info('[auth] directLogin using URL', { loginUrl, tenantId: activeTenantId })
       
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -297,6 +317,8 @@ class AuthService {
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
           state: state,
+          // Include tenant ID in the request body for backend context
+          ...(activeTenantId && { tenant_id: activeTenantId }),
         }),
       })
 
