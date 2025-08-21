@@ -42,8 +42,10 @@ type Dependencies struct {
 // SetupRoutes configures all the routes for the application
 func SetupRoutes(deps *Dependencies) *mux.Router {
 	router := mux.NewRouter()
+	router.StrictSlash(true)
 
 	// Well-known endpoints FIRST (no middleware, public access)
+	// These must be registered before any PathPrefix routes to avoid conflicts
 	setupWellKnownRoutes(router, deps)
 
 	// Setup endpoints (no middleware, available during initial setup)
@@ -55,11 +57,11 @@ func SetupRoutes(deps *Dependencies) *mux.Router {
 	// API routes with tenant middleware
 	setupAPIRoutes(router, deps)
 
-	// Tenant-specific routes
-	setupTenantRoutes(router, deps)
-
-	// Legacy routes (backwards compatibility)
+	// Legacy routes (backwards compatibility) - before tenant routes
 	setupLegacyRoutes(router, deps)
+
+	// Tenant-specific routes LAST (uses PathPrefix which can conflict)
+	setupTenantRoutes(router, deps)
 
 	return router
 }
@@ -69,8 +71,8 @@ func setupWellKnownRoutes(router *mux.Router, deps *Dependencies) {
 	// OpenID Connect Discovery endpoints - must be accessible without authentication
 	router.HandleFunc("/.well-known/openid_configuration", deps.AutodiscoveryHandler.LegacyDiscoveryHandler).Methods("GET")
 	
-	// Tenant-specific autodiscovery endpoints - extract tenant ID from URL path
-	router.HandleFunc("/tenant/{tenantId}/.well-known/openid_configuration", func(w http.ResponseWriter, r *http.Request) {
+	// Tenant-specific autodiscovery endpoints - New format: /.well-known/{tenant-id}/openid_configuration
+	router.HandleFunc("/.well-known/{tenantId}/openid_configuration", func(w http.ResponseWriter, r *http.Request) {
 		// Extract tenant ID from URL path directly (no middleware needed)
 		vars := mux.Vars(r)
 		tenantID := vars["tenantId"]
