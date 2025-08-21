@@ -160,6 +160,21 @@ const TenantDetails: React.FC<TenantDetailsProps> = ({ tenant, onEdit }) => {
           <h4 className="text-md font-medium text-gray-900 mb-3">Basic Information</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-medium text-gray-700">ID</label>
+              <div className="mt-1 flex items-center">
+                <p className="text-sm text-gray-900 font-mono">{tenant.id}</p>
+                <button
+                  onClick={() => navigator.clipboard.writeText(tenant.id || '')}
+                  className="ml-2 p-1 text-gray-400 hover:text-gray-600"
+                  title="Copy tenant ID"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700">Name</label>
               <p className="mt-1 text-sm text-gray-900">{tenant.name}</p>
             </div>

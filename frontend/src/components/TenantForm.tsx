@@ -143,6 +143,29 @@ export const TenantForm: React.FC<TenantFormProps> = ({
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {tenant && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tenant ID
+              </label>
+              <div className="flex items-center">
+                <div className="flex-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-gray-900 font-mono">
+                  {tenant.id}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(tenant.id || '')}
+                  className="ml-2 p-2 text-gray-400 hover:text-gray-600 border border-gray-300 rounded-md bg-white hover:bg-gray-50"
+                  title="Copy tenant ID"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">Read-only</p>
+            </div>
+          )}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Tenant Name *
