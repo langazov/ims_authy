@@ -205,7 +205,8 @@ func (h *AuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	// Get user's actual permissions from database within tenant context
 	user, err := h.userService.GetUserByIDAndTenant(userID, tenantID)
 	if err != nil {
-		http.Error(w, "User not found", http.StatusUnauthorized)
+		msg := fmt.Sprintf("User %s not found in tenant %s", userID, tenantID)
+		http.Error(w, msg, http.StatusUnauthorized)
 		return
 	}
 
@@ -372,8 +373,22 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
                 return;
             }
 
+            // Determine the correct login endpoint based on current URL
+            let loginEndpoint = '/login';
+            const currentPath = window.location.pathname;
+            
+            // Check if we're on a tenant-specific authorization page
+            const tenantMatch = currentPath.match(/^\/tenant\/([^\/]+)\//);
+            if (tenantMatch) {
+                const tenantId = tenantMatch[1];
+                loginEndpoint = '/tenant/' + tenantId + '/login';
+                console.log('Using tenant-specific login endpoint:', loginEndpoint, 'for tenant:', tenantId);
+            } else {
+                console.log('Using legacy login endpoint:', loginEndpoint);
+            }
+
             try {
-                const response = await fetch('/login', {
+                const response = await fetch(loginEndpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -386,9 +401,12 @@ func (h *AuthHandler) showAuthorizePage(w http.ResponseWriter, r *http.Request) 
                     document.getElementById('user_id').value = userData.user_id;
                     document.querySelector('form').submit();
                 } else {
+                    const errorText = await response.text();
+                    console.error('Login failed:', response.status, errorText);
                     alert('Invalid credentials');
                 }
             } catch (error) {
+                console.error('Login error:', error);
                 alert('Login failed');
             }
         }
