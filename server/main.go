@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -34,6 +35,7 @@ func main() {
 	oauthService := services.NewOAuthService(db, cfg.JWTSecret)
 	socialAuthService := services.NewSocialAuthService(userService, db)
 	twoFactorService := services.NewTwoFactorService(db)
+	cryptoKeyService := services.NewCryptoKeyService(db)
 
 	// Initialize default social providers service
 	socialProviderService := services.NewSocialProviderService(db)
@@ -74,6 +76,11 @@ func main() {
 		if err := socialProviderService.InitializeDefaultProviders(""); err != nil {
 			log.Printf("Warning: Failed to initialize default social providers: %v", err)
 		}
+
+		// Initialize default cryptographic keys if none exist
+		if err := cryptoKeyService.InitializeDefaultKeys(context.Background()); err != nil {
+			log.Printf("Warning: Failed to initialize default cryptographic keys: %v", err)
+		}
 	}
 
 	authHandler := handlers.NewAuthHandler(userService, oauthService, socialAuthService, twoFactorService)
@@ -87,7 +94,7 @@ func main() {
 	twoFactorHandler := handlers.NewTwoFactorHandler(twoFactorService, userService, oauthService)
 	setupHandler := handlers.NewSetupHandler(setupService)
 	autodiscoveryHandler := autodiscovery.NewHandler()
-	jwksHandler := handlers.NewJWKSHandler(cfg.JWTSecret)
+	jwksHandler := handlers.NewJWKSHandler(cfg.JWTSecret, cryptoKeyService)
 
 	// Setup all dependencies for routes
 	deps := &routes.Dependencies{
