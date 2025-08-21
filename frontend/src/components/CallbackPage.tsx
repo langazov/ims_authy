@@ -8,9 +8,13 @@ export default function CallbackPage() {
   const { handleCallback } = useAuth()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [error, setError] = useState<string>('')
+  const [processed, setProcessed] = useState(false)
 
   useEffect(() => {
+    if (processed) return
+    
     const processCallback = async () => {
+      setProcessed(true)
       const urlParams = new URLSearchParams(window.location.search)
       const code = urlParams.get('code')
       const state = urlParams.get('state')
