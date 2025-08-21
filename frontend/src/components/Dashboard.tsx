@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api'
 import { useTenant } from '@/contexts/TenantContext'
 import { LoginUrlsBox } from '@/components/LoginUrlsBox'
+import { TenantAuthTest } from '@/components/TenantAuthTest'
 
 interface ActivityItem {
   id: string
@@ -236,6 +237,11 @@ export default function Dashboard() {
       {/* Login URLs Box */}
       <div className="grid gap-6">
         <LoginUrlsBox />
+      </div>
+
+      {/* Tenant Authentication Test */}
+      <div className="grid gap-6">
+        <TenantAuthTest />
       </div>
     </div>
   )

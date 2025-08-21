@@ -326,22 +326,37 @@ class AuthService {
         console.warn('[auth] directLogin - no tenant ID available, using legacy flow')
       }
       
+      // Build request body with explicit tenant ID handling
+      const requestBody: any = {
+        email,
+        password,
+        two_fa_code: twoFACode,
+        // Include OAuth parameters for PKCE flow
+        client_id: config.oauth.clientId,
+        redirect_uri: config.oauth.redirectUri,
+        code_challenge: codeChallenge,
+        code_challenge_method: 'S256',
+        state: state,
+      }
+
+      // Always include tenant_id in body when available (even if also in header)
+      if (activeTenantId) {
+        requestBody.tenant_id = activeTenantId
+        console.info('[auth] directLogin - including tenant_id in request body', { tenant_id: activeTenantId })
+      } else {
+        console.warn('[auth] directLogin - no tenant_id in request body (legacy mode)')
+      }
+
+      console.info('[auth] directLogin - full request body', {
+        ...requestBody,
+        password: '***REDACTED***',
+        two_fa_code: twoFACode ? '***REDACTED***' : undefined
+      })
+
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          email,
-          password,
-          two_fa_code: twoFACode,
-          // Include OAuth parameters for PKCE flow
-          client_id: config.oauth.clientId,
-          redirect_uri: config.oauth.redirectUri,
-          code_challenge: codeChallenge,
-          code_challenge_method: 'S256',
-          state: state,
-          // Include tenant ID in the request body for backend context (redundant with header but safe)
-          ...(activeTenantId && { tenant_id: activeTenantId }),
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
