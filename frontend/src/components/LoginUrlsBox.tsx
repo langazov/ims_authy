@@ -1,8 +1,10 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ExternalLink, Copy, Check } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ExternalLink, Copy, Check, Play } from 'lucide-react'
 import { useTenant } from '@/contexts/TenantContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { config } from '@/lib/config'
 import { TenantUrlBuilder } from '@/lib/tenantUrls'
 
@@ -16,7 +18,10 @@ interface LoginUrl {
 
 export function LoginUrlsBox() {
   const { activeTenant } = useTenant()
+  const { login, loginWithSocial } = useAuth()
   const [copiedUrl, setCopiedUrl] = useState<string>('')
+  const [loginUrls, setLoginUrls] = useState<LoginUrl[]>([])
+  const [loading, setLoading] = useState(true)
 
   const copyToClipboard = async (url: string) => {
     try {
@@ -28,17 +33,57 @@ export function LoginUrlsBox() {
     }
   }
 
-  const generateLoginUrls = (): LoginUrl[] => {
+  const handleTestLogin = (loginUrl: LoginUrl) => {
+    if (loginUrl.type === 'oauth') {
+      // Use proper OAuth flow with AuthService
+      login()
+    } else if (loginUrl.type === 'social' && loginUrl.provider) {
+      // Use proper social login flow with AuthService
+      loginWithSocial(loginUrl.provider as 'google' | 'github' | 'facebook' | 'apple', activeTenant?.id)
+    } else {
+      // For direct login, just open the URL since it's a different flow
+      window.open(loginUrl.url, '_blank')
+    }
+  }
+
+  // Generate PKCE parameters for OAuth URLs
+  const generateCodeVerifier = (): string => {
+    const array = new Uint8Array(32)
+    crypto.getRandomValues(array)
+    return btoa(String.fromCharCode(...array))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+  }
+
+  const generateCodeChallenge = async (verifier: string): Promise<string> => {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(verifier)
+    const digest = await crypto.subtle.digest('SHA-256', data)
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+  }
+
+  const generateLoginUrls = async (): Promise<LoginUrl[]> => {
     const urls: LoginUrl[] = []
     const tenantId = activeTenant?.id
 
-    // OAuth2 Authorization URL
+    // Generate PKCE parameters for OAuth URLs
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    const state = crypto.randomUUID()
+
+    // OAuth2 Authorization URL with PKCE
     const oauthParams = new URLSearchParams({
       response_type: 'code',
       client_id: config.oauth.clientId,
       redirect_uri: config.oauth.redirectUri,
       scope: config.oauth.scope,
-      state: 'dashboard-preview'
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256'
     })
 
     if (tenantId) {
@@ -64,7 +109,9 @@ export function LoginUrlsBox() {
         const socialParams = new URLSearchParams({
           client_id: config.oauth.clientId,
           redirect_uri: config.oauth.redirectUri,
-          state: 'dashboard-preview'
+          state: state,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256'
         })
 
         urls.push({
@@ -99,7 +146,9 @@ export function LoginUrlsBox() {
         const socialParams = new URLSearchParams({
           client_id: config.oauth.clientId,
           redirect_uri: config.oauth.redirectUri,
-          state: 'dashboard-preview'
+          state: state,
+          code_challenge: codeChallenge,
+          code_challenge_method: 'S256'
         })
 
         urls.push({
@@ -115,7 +164,23 @@ export function LoginUrlsBox() {
     return urls
   }
 
-  const loginUrls = generateLoginUrls()
+  // Generate URLs when component mounts or tenant changes
+  useEffect(() => {
+    const loadUrls = async () => {
+      setLoading(true)
+      try {
+        const urls = await generateLoginUrls()
+        setLoginUrls(urls)
+      } catch (error) {
+        console.error('Failed to generate login URLs:', error)
+        setLoginUrls([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUrls()
+  }, [activeTenant?.id])
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -143,6 +208,24 @@ export function LoginUrlsBox() {
       default:
         return '🔗'
     }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <ExternalLink className="mr-2 h-5 w-5" />
+            Login URLs
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (loginUrls.length === 0) {
@@ -191,6 +274,16 @@ export function LoginUrlsBox() {
                 </Badge>
               </div>
               <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleTestLogin(loginUrl)}
+                  className="px-2 py-1 h-8"
+                  title="Test this login method properly"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  Test
+                </Button>
                 <button
                   onClick={() => copyToClipboard(loginUrl.url)}
                   className="p-1 text-gray-400 hover:text-gray-600"
@@ -205,7 +298,7 @@ export function LoginUrlsBox() {
                 <button
                   onClick={() => window.open(loginUrl.url, '_blank')}
                   className="p-1 text-gray-400 hover:text-gray-600"
-                  title="Open URL"
+                  title="Open URL (will fail - see warning below)"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </button>
@@ -220,8 +313,10 @@ export function LoginUrlsBox() {
         
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-xs text-yellow-800">
-            <strong>Note:</strong> These URLs are for integration and testing purposes. 
-            The state parameter in OAuth URLs should be properly generated for production use.
+            <strong>⚠️ Important:</strong> These URLs contain pre-generated PKCE parameters and are for reference only. 
+            In production, each OAuth flow must generate fresh <code>code_challenge</code>, <code>state</code>, and 
+            <code>code_verifier</code> parameters. Do not use these URLs directly for authentication - they will fail 
+            because the code verifier is not stored in your session.
           </p>
         </div>
       </CardContent>
