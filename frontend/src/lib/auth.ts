@@ -73,6 +73,12 @@ class AuthService {
       code_challenge_method: 'S256'
     })
 
+    // Add tenant ID as query parameter for additional backend context
+    if (activeTenantId) {
+      params.set('tenant_id', activeTenantId)
+      console.info('[auth] startLogin - adding tenant_id to OAuth query parameters', { tenant_id: activeTenantId })
+    }
+
     // Use tenant-specific URL if a tenant is selected, otherwise use legacy URL
     const authUrl = activeTenantId 
       ? TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
@@ -99,6 +105,12 @@ class AuthService {
       code_challenge: codeChallenge,
       code_challenge_method: 'S256'
     })
+
+    // Add tenant ID as query parameter for additional backend context
+    if (tenantId) {
+      params.set('tenant_id', tenantId)
+      console.info('[auth] startSocialLogin - adding tenant_id to social login query parameters', { tenant_id: tenantId })
+    }
 
     // Use tenant-specific URL if a tenant is provided, otherwise use legacy URL
     const socialUrl = tenantId 

@@ -86,6 +86,11 @@ export function LoginUrlsBox() {
       code_challenge_method: 'S256'
     })
 
+    // Add tenant ID as query parameter when available
+    if (tenantId) {
+      oauthParams.set('tenant_id', tenantId)
+    }
+
     if (tenantId) {
       urls.push({
         name: 'OAuth2 Login',
@@ -113,6 +118,11 @@ export function LoginUrlsBox() {
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
         })
+
+        // Add tenant ID as query parameter
+        if (tenantId) {
+          socialParams.set('tenant_id', tenantId)
+        }
 
         urls.push({
           name: `${providerConfig.name} Login`,
@@ -150,6 +160,8 @@ export function LoginUrlsBox() {
           code_challenge: codeChallenge,
           code_challenge_method: 'S256'
         })
+
+        // Legacy mode - no tenant ID added
 
         urls.push({
           name: `${providerConfig.name} Login (Legacy)`,
