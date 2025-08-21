@@ -14,22 +14,86 @@ define('IMS_AUTHY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 // Fixed server base URL for this plugin
 define('IMS_AUTHY_BASE_URL', 'https://oauth2.imsc.eu');
 
+// Plugin activation hook
+register_activation_hook(__FILE__, function() {
+    // Ensure the plugin is properly set up on activation
+    if (!get_option('ims_authy_setup_complete')) {
+        update_option('ims_authy_setup_complete', false);
+    }
+    
+    // Set default redirect URI if not set
+    if (!get_option('ims_authy_redirect_uri')) {
+        update_option('ims_authy_redirect_uri', site_url('/ims-authy-callback'));
+    }
+    
+    // Flush rewrite rules to ensure callback URL works
+    flush_rewrite_rules();
+});
+
+// Fallback handler for direct access to setup page
+add_action('admin_init', function() {
+    if (isset($_GET['page']) && $_GET['page'] === 'ims-authy-setup') {
+        // If someone is trying to access the setup page but it's not registered in menu,
+        // check permissions and show it anyway
+        if (!function_exists('get_current_screen')) {
+            return;
+        }
+        
+        $screen = get_current_screen();
+        if ($screen && $screen->id === 'admin_page_ims-authy-setup') {
+            // This means WordPress found the page, so our menu registration worked
+            return;
+        }
+        
+        // If we get here, the page wasn't found in menu, so let's handle it directly
+        if (current_user_can('manage_options')) {
+            // Hijack the admin page display
+            add_action('admin_notices', function() {
+                echo '<div class="notice notice-info">';
+                echo '<p><strong>IMS Authy Setup:</strong> Direct access mode (page not found in menu)</p>';
+                echo '</div>';
+            });
+        }
+    }
+});
+
 // Register settings and setup page
 add_action('admin_menu', function() {
-    // Check if setup is needed
+    // Always register the setup page so it's accessible via direct URL
+    // Use a more permissive capability for setup to ensure admins can access it
+    $setup_capability = apply_filters('ims_authy_setup_capability', 'manage_options');
+    
+    // Check if setup is needed for menu visibility
     $tenant_id = get_option('ims_authy_tenant_id');
     $setup_complete = get_option('ims_authy_setup_complete');
+    $show_in_menu = !$setup_complete || empty($tenant_id);
     
-    if (!$setup_complete || empty($tenant_id)) {
+    // Debug logging
+    if (defined('WP_DEBUG') && WP_DEBUG) {
+        error_log('[IMS Authy] Admin menu hook - tenant_id: ' . ($tenant_id ?: 'empty') . ', setup_complete: ' . ($setup_complete ? 'true' : 'false') . ', show_in_menu: ' . ($show_in_menu ? 'true' : 'false'));
+        error_log('[IMS Authy] Registering setup page with capability: ' . $setup_capability);
+    }
+    
+    if ($show_in_menu) {
         // Add setup page to main admin menu for visibility
         add_menu_page(
             'IMS Authy Setup', 
             'IMS Authy Setup', 
-            'manage_options', 
+            $setup_capability, 
             'ims-authy-setup', 
             'ims_authy_setup_page',
             'dashicons-admin-network',
             30
+        );
+    } else {
+        // Still register the page but hidden from menu (accessible via direct URL)
+        add_submenu_page(
+            null, // No parent = hidden from menu
+            'IMS Authy Setup',
+            'IMS Authy Setup', 
+            $setup_capability,
+            'ims-authy-setup',
+            'ims_authy_setup_page'
         );
     }
     
@@ -140,7 +204,26 @@ function ims_authy_get_discovery($return_debug = false) {
 }
 
 function ims_authy_setup_page() {
-    if (!current_user_can('manage_options')) return;
+    $setup_capability = apply_filters('ims_authy_setup_capability', 'manage_options');
+    
+    if (!current_user_can($setup_capability)) {
+        $current_user = wp_get_current_user();
+        $user_caps = $current_user->get_role_caps();
+        
+        echo '<div class="wrap">';
+        echo '<h1>Permission Error</h1>';
+        echo '<div class="notice notice-error">';
+        echo '<p><strong>Access Denied:</strong> You need administrator privileges to access the IMS Authy setup page.</p>';
+        echo '<p><strong>Current user:</strong> ' . esc_html($current_user->user_login) . '</p>';
+        echo '<p><strong>Required capability:</strong> ' . esc_html($setup_capability) . '</p>';
+        if (current_user_can('read')) {
+            echo '<p><strong>Your capabilities:</strong> ' . esc_html(implode(', ', array_keys(array_filter($user_caps)))) . '</p>';
+        }
+        echo '<p>Please contact your site administrator to complete the IMS Authy SSO setup.</p>';
+        echo '</div>';
+        echo '</div>';
+        return;
+    }
     
     $setup_complete = isset($_GET['setup']) && $_GET['setup'] === 'complete';
     $tenant_id = get_option('ims_authy_tenant_id', '');
