@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
 
 	"oauth2-openid-server/config"
 	"oauth2-openid-server/database"
