@@ -85,15 +85,10 @@ class AuthService {
       console.info('[auth] startLogin - adding tenant_id to OAuth query parameters', { tenant_id: activeTenantId })
     }
 
-    // TEMPORARY: Use legacy URL until backend implements tenant-specific routes
-    // TODO: Switch back to tenant-specific URLs when backend is ready
-    const authUrl = TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
-    
-    // Log the intended tenant-specific URL for backend development reference
-    if (activeTenantId && activeTenantId.trim()) {
-      const intendedTenantUrl = TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
-      console.info('[auth] startLogin - intended tenant URL (backend not ready)', { intendedTenantUrl })
-    }
+    // Use tenant-specific URL if a tenant is selected, otherwise use legacy URL
+    const authUrl = (activeTenantId && activeTenantId.trim())
+      ? TenantUrlBuilder.buildOAuthAuthorizeUrl(activeTenantId, params)
+      : TenantUrlBuilder.buildLegacyOAuthAuthorizeUrl(params)
 
     console.info('[auth] redirecting to OAuth provider', { authUrl, tenantId: activeTenantId })
     window.location.href = authUrl
@@ -190,16 +185,9 @@ class AuthService {
 
     // Use tenant-specific URL if a tenant is selected
     const activeTenantId = localStorage.getItem('activeTenantId')
-    
-    // TEMPORARY: Use legacy URL until backend implements tenant-specific routes
-    // TODO: Switch back to tenant-specific URLs when backend is ready
-    const tokenUrl = TenantUrlBuilder.buildLegacyOAuthTokenUrl()
-    
-    // Log the intended tenant-specific URL for backend development reference
-    if (activeTenantId && activeTenantId.trim()) {
-      const intendedTenantUrl = TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
-      console.info('[auth] token exchange - intended tenant URL (backend not ready)', { intendedTenantUrl })
-    }
+    const tokenUrl = (activeTenantId && activeTenantId.trim())
+      ? TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
+      : TenantUrlBuilder.buildLegacyOAuthTokenUrl()
 
     // Build headers with tenant context
     const headers: Record<string, string> = {
@@ -357,15 +345,9 @@ class AuthService {
       })
 
       // Step 1: Authenticate with credentials and get authorization code
-      // TEMPORARY: Use legacy URL until backend implements tenant-specific routes
-      // TODO: Switch back to tenant-specific URLs when backend is ready
-      const loginUrl = TenantUrlBuilder.buildLegacyDirectLoginUrl()
-      
-      // Log the intended tenant-specific URL for backend development reference
-      if (activeTenantId && activeTenantId.trim()) {
-        const intendedTenantUrl = TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
-        console.info('[auth] directLogin - intended tenant URL (backend not ready)', { intendedTenantUrl })
-      }
+      const loginUrl = (activeTenantId && activeTenantId.trim())
+        ? TenantUrlBuilder.buildDirectLoginUrl(activeTenantId)
+        : TenantUrlBuilder.buildLegacyDirectLoginUrl()
       
       console.info('[auth] directLogin using URL', { loginUrl, tenantId: activeTenantId })
       
@@ -419,6 +401,8 @@ class AuthService {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
+        credentials: 'include',
+        mode: 'cors'
       })
 
       if (!response.ok) {
