@@ -171,12 +171,23 @@ class AuthService {
       ? TenantUrlBuilder.buildOAuthTokenUrl(activeTenantId)
       : TenantUrlBuilder.buildLegacyOAuthTokenUrl()
 
-    console.debug('[auth] exchanging code for tokens', { tokenUrl })
+    // Build headers with tenant context
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    }
+    
+    // Add X-Tenant-ID header if tenant is available
+    if (activeTenantId) {
+      headers['X-Tenant-ID'] = activeTenantId
+      console.info('[auth] token exchange - adding X-Tenant-ID header', { tenantId: activeTenantId })
+    } else {
+      console.warn('[auth] token exchange - no tenant ID available, using legacy flow')
+    }
+    
+    console.debug('[auth] exchanging code for tokens', { tokenUrl, tenantId: activeTenantId })
     const response = await fetch(tokenUrl, {
       method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers,
       body: tokenData,
       credentials: 'include',
       mode: 'cors'
@@ -302,11 +313,22 @@ class AuthService {
       
       console.info('[auth] directLogin using URL', { loginUrl, tenantId: activeTenantId })
       
+      // Build headers with tenant context
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      // Add X-Tenant-ID header if tenant is available
+      if (activeTenantId) {
+        headers['X-Tenant-ID'] = activeTenantId
+        console.info('[auth] directLogin - adding X-Tenant-ID header', { tenantId: activeTenantId })
+      } else {
+        console.warn('[auth] directLogin - no tenant ID available, using legacy flow')
+      }
+      
       const response = await fetch(loginUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           email,
           password,
@@ -317,7 +339,7 @@ class AuthService {
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
           state: state,
-          // Include tenant ID in the request body for backend context
+          // Include tenant ID in the request body for backend context (redundant with header but safe)
           ...(activeTenantId && { tenant_id: activeTenantId }),
         }),
       })
