@@ -1,0 +1,134 @@
+services:
+  mongodb:
+    image: mongo:7-jammy
+    container_name: oauth2-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-oauth2_server}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./server/scripts/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - oauth2-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  oauth2-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: oauth2-server
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      - PORT=${PORT:-8080}
+      - HTTPS_PORT=${HTTPS_PORT:-8443}
+      - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-password123}@mongodb:27017/${DATABASE_NAME:-oauth2_server}?authSource=admin
+      - DATABASE_NAME=${DATABASE_NAME:-oauth2_server}
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
+      - CLIENT_ID=${CLIENT_ID:-frontend-client}
+      - CLIENT_SECRET=${CLIENT_SECRET:-oauth2-secret}
+      - REDIRECT_URL=${REDIRECT_URL:-https://authy.docker.local/callback}
+      - AUTH_SERVER_URL=${AUTH_SERVER_URL:-https://oauth2.docker.local:8443/oauth/authorize}
+      - TOKEN_SERVER_URL=${TOKEN_SERVER_URL:-https://oauth2.docker.local:8443/oauth/token}
+      # SSL Configuration
+      - SSL_CERT_PATH=/etc/ssl/certs/server-cert.pem
+      - SSL_KEY_PATH=/etc/ssl/private/server-key.pem
+      # Social login provider configurations (set your own credentials)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL:-https://oauth2.docker.local:8443/auth/google/callback}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
+      - GITHUB_REDIRECT_URL=${GITHUB_REDIRECT_URL:-https://oauth2.docker.local:8443/auth/github/callback}
+      - FACEBOOK_CLIENT_ID=${FACEBOOK_CLIENT_ID:-}
+      - FACEBOOK_CLIENT_SECRET=${FACEBOOK_CLIENT_SECRET:-}
+      - FACEBOOK_REDIRECT_URL=${FACEBOOK_REDIRECT_URL:-https://oauth2.docker.local:8443/auth/facebook/callback}
+      - APPLE_CLIENT_ID=${APPLE_CLIENT_ID:-}
+      - APPLE_CLIENT_SECRET=${APPLE_CLIENT_SECRET:-}
+      - APPLE_REDIRECT_URL=${APPLE_REDIRECT_URL:-https://oauth2.docker.local:8443/auth/apple/callback}
+    ports:
+      - "${PORT:-8080}:8080"
+      - "${HTTPS_PORT:-8443}:8443"
+    volumes:
+      - ./certs/server-cert.pem:/etc/ssl/certs/server-cert.pem:ro
+      - ./certs/server-key.pem:/etc/ssl/private/server-key.pem:ro
+    networks:
+      oauth2-network:
+        aliases:
+          - oauth2.docker.local
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "--no-check-certificate", "https://localhost:8443/health || wget --no-verbose --tries=1 --spider http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.ssl
+    container_name: oauth2-frontend
+    restart: unless-stopped
+    depends_on:
+      oauth2-server:
+        condition: service_healthy
+    environment:
+      - VITE_API_BASE_URL=${FRONTEND_API_URL:-https://oauth2.docker.local:8443}
+      - VITE_AUTH_SERVER_URL=${AUTH_SERVER_URL:-https://oauth2.docker.local:8443/oauth/authorize}
+      - VITE_TOKEN_SERVER_URL=${TOKEN_SERVER_URL:-https://oauth2.docker.local:8443/oauth/token}
+      - VITE_CLIENT_ID=${CLIENT_ID:-frontend-client}
+      - VITE_OAUTH_REDIRECT_URI=${REDIRECT_URL:-https://authy.docker.local/callback}
+    ports:
+      - "${FRONTEND_HTTP_PORT:-80}:80"
+      - "${FRONTEND_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./certs/server-cert.pem:/etc/ssl/certs/server-cert.pem:ro
+      - ./certs/server-key.pem:/etc/ssl/private/server-key.pem:ro
+    networks:
+      oauth2-network:
+        aliases:
+          - authy.docker.local
+    extra_hosts:
+      - "oauth2.docker.local:host-gateway"
+
+  # Optional: MongoDB Express for database management
+  mongo-express:
+    image: mongo-express:1-20-alpine3.18
+    container_name: oauth2-mongo-express
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-password123}
+      ME_CONFIG_MONGODB_AUTH_DATABASE: admin
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+    networks:
+      - oauth2-network
+    profiles:
+      - tools
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  oauth2-network:
+    driver: bridge

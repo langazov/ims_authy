@@ -41,3 +41,9 @@ node_modules
 # Docker
 **/docker-compose.override.yml
 **/docker-compose.local.yml
+
+# SSL Certificates (keep private keys secure)
+certs/
+*.pem
+*.key
+*.crt

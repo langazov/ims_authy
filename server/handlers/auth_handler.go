@@ -75,7 +75,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Login:  User %s logging in from tenant %s", user.Email, tenantID)
 	log.Printf("Login: User ID: %s, Scopes: %v, Groups: %v", user.ID.Hex(), user.Scopes, user.Groups)
+	log.Printf("Login: User: %v", user)
 	if !h.userService.ValidatePassword(user, loginReq.Password) {
+		log.Printf("Login: Invalid password for user %s , stored pass: %s, passwd in request: %s", user.Email, user.PasswordHash, loginReq.Password)
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
